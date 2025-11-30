@@ -29,7 +29,7 @@ def get_db_conn():
 def execute_query(sql, params=None, fetchone=False, fetchall=False, commit=False):
     """공통 쿼리 실행 헬퍼"""
     conn = get_db_conn()
-    cur = conn.cursor(dictionary=True)
+    cur = conn.cursor()
 
     cur.execute(sql, params or ())
 
