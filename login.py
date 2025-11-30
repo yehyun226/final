@@ -1,6 +1,6 @@
 # 로그인
 import streamlit as st
-from db import execute_query
+from railway_mysql import execute_query
 from utils.security import hash_password, check_password
 
 def get_user_by_username(username: str):
