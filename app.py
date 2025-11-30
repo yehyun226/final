@@ -19,7 +19,7 @@ def db_conn():
         database=os.environ["MYSQL_DB"],
         port=int(os.environ["MYSQL_PORT"]),
         cursorclass=pymysql.cursors.DictCursor,
-        autocommit=True
+        autocommit=True,
     )
 
 
@@ -53,9 +53,8 @@ ROLE_PERMISSIONS = {
         "risk": ["view"],
         "attachments": ["upload_own", "view_own"],
         "user_management": [],
-        "audit_logs": []
+        "audit_logs": [],
     },
-
     "QA": {
         "change_control": ["create", "edit", "review", "approve", "view"],
         "deviations": ["create", "edit", "review", "approve", "view"],
@@ -63,9 +62,8 @@ ROLE_PERMISSIONS = {
         "risk": ["create", "edit", "approve", "view"],
         "attachments": ["upload", "view"],
         "user_management": [],
-        "audit_logs": ["view"]
+        "audit_logs": ["view"],
     },
-
     "QC": {
         "change_control": ["view"],
         "deviations": ["create", "edit_partial", "view"],
@@ -73,9 +71,8 @@ ROLE_PERMISSIONS = {
         "risk": ["view"],
         "attachments": ["upload_own", "view_own"],
         "user_management": [],
-        "audit_logs": []
+        "audit_logs": [],
     },
-
     "ADMIN": {
         "change_control": ["create", "edit", "delete", "force_approve", "view"],
         "deviations": ["create", "edit", "delete", "force_approve", "view"],
@@ -83,15 +80,29 @@ ROLE_PERMISSIONS = {
         "risk": ["create", "edit", "delete", "approve", "view"],
         "attachments": ["upload", "delete", "view_all"],
         "user_management": ["create", "edit", "delete", "assign_roles"],
-        "audit_logs": ["view", "view_all"]
-    }
+        "audit_logs": ["view_all"],  # view_all 은 view 로도 인정해줄 거라서 이렇게 둠
+    },
 }
 
 
 # ====================================================
-# 2. PERMISSION CHECK
+# 2. AUTH / PERMISSION
 # ====================================================
-def require_permission(module, action):
+def hash_pw(pw: str) -> str:
+    return bcrypt.hashpw(pw.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def verify_pw(pw: str, hashed: str) -> bool:
+    return bcrypt.checkpw(pw.encode("utf-8"), hashed.encode("utf-8"))
+
+
+def login_required():
+    if "user" not in st.session_state:
+        st.warning("로그인이 필요합니다.")
+        st.stop()
+
+
+def require_permission(module: str, action: str):
     user = st.session_state.get("user")
     if not user:
         st.error("로그인이 필요합니다.")
@@ -100,20 +111,13 @@ def require_permission(module, action):
     role = user["role"]
     allowed = ROLE_PERMISSIONS.get(role, {}).get(module, [])
 
+    # ADMIN 의 view_all 을 view 로 인정
+    if action == "view" and "view_all" in allowed:
+        return
+
     if action not in allowed:
         st.error("⚠️ 접근 권한이 없습니다.")
         st.stop()
-
-
-# ====================================================
-# 3. PASSWORD / AUTH
-# ====================================================
-def hash_pw(pw):
-    return bcrypt.hashpw(pw.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-
-
-def verify_pw(pw, hashed):
-    return bcrypt.checkpw(pw.encode("utf-8"), hashed.encode("utf-8"))
 
 
 def login_screen():
@@ -128,11 +132,15 @@ def login_screen():
             st.error("존재하지 않는 사용자입니다.")
             return
 
+        if not user.get("password_hash"):
+            st.error("비밀번호가 설정되지 않은 계정입니다.")
+            return
+
         if verify_pw(pw, user["password_hash"]):
             st.session_state["user"] = {
                 "id": user["id"],
                 "username": user["username"],
-                "role": user["role"]
+                "role": user["role"],
             }
             st.success("로그인 성공")
             st.rerun()
@@ -140,42 +148,41 @@ def login_screen():
             st.error("비밀번호가 올바르지 않습니다.")
 
 
-def login_required():
-    if "user" not in st.session_state:
-        st.warning("로그인이 필요합니다.")
-        st.stop()
-
-
 # ====================================================
-# 4. AUDIT TRAIL LOG
+# 3. AUDIT TRAIL LOG
 # ====================================================
 def log_action(user_id, action_type, obj_type, obj_id,
-               field=None, old=None, new=None):
-
+               field_name=None, old_value=None, new_value=None):
     sql = """
     INSERT INTO audit_logs
     (user_id, action_type, object_type, object_id, field_name, old_value, new_value)
     VALUES (%s,%s,%s,%s,%s,%s,%s)
     """
-    q(sql, (user_id, action_type, obj_type, obj_id, field, old, new), commit=True)
+    q(sql, (user_id, action_type, obj_type, obj_id,
+            field_name, old_value, new_value), commit=True)
 
 
 # ====================================================
-# 5. CHANGE CONTROL PAGE
+# 4. CHANGE CONTROL
 # ====================================================
 def page_change_control():
     login_required()
+    user = st.session_state["user"]
+
     st.header("📋 Change Control")
 
     tab_list, tab_new, tab_status = st.tabs(["목록", "새 변경 생성", "상태 변경"])
 
-    # ---------------- LIST ----------------
+    # ---------- LIST ----------
     with tab_list:
         require_permission("change_control", "view")
         rows = q("SELECT * FROM change_controls ORDER BY created_at DESC", all=True)
-        st.dataframe(pd.DataFrame(rows) if rows else pd.DataFrame())
+        if rows:
+            st.dataframe(pd.DataFrame(rows), use_container_width=True)
+        else:
+            st.info("등록된 Change Control이 없습니다.")
 
-    # ---------------- NEW ----------------
+    # ---------- NEW ----------
     with tab_new:
         require_permission("change_control", "create")
 
@@ -186,73 +193,98 @@ def page_change_control():
         risk_level = st.selectbox("위험도", ["Low", "Medium", "High"])
 
         if st.button("생성"):
-            change_id = "CHG-" + datetime.now().strftime("%Y%m%d-%H%M%S")
+            if not title or not description:
+                st.warning("제목과 설명은 필수입니다.")
+            else:
+                change_id = "CHG-" + datetime.now().strftime("%Y%m%d-%H%M%S")
 
-            sql = """
-            INSERT INTO change_controls
-            (change_id, title, type, description, impact, risk_level, created_by, status)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
-            """
+                sql = """
+                INSERT INTO change_controls
+                (change_id, title, type, description, impact, risk_level,
+                 created_by, status)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                """
+                params = (change_id, title, ctype, description,
+                          impact, risk_level, user["id"], "Draft")
+                q(sql, params, commit=True)
 
-            q(sql, (change_id, title, ctype, description,
-                    impact, risk_level, st.session_state["user"]["id"], "Draft"),
-              commit=True)
+                log_action(user["id"], "CREATE", "CHANGE", change_id,
+                           new_value=title)
 
-            log_action(st.session_state["user"]["id"], "CREATE", "CHANGE", change_id, new=title)
-            st.success(f"등록 완료! (ID={change_id})")
-            st.rerun()
+                st.success(f"등록 완료! (ID = {change_id})")
+                st.rerun()
 
-    # ---------------- STATUS CHANGE ----------------
+    # ---------- STATUS CHANGE ----------
     with tab_status:
+        # QA / ADMIN 정도만 사용하게 할 거면 'edit' 기준
         require_permission("change_control", "edit")
 
-        cid = st.text_input("Change ID 입력")
+        cid = st.text_input("Change ID 입력 (예: CHG-20251130-123000)")
 
         if st.button("불러오기"):
-            row = q("SELECT * FROM change_controls WHERE change_id=%s", (cid,), one=True)
-            st.session_state["selected_change"] = row
+            row = q("SELECT * FROM change_controls WHERE change_id=%s",
+                    (cid,), one=True)
+            if not row:
+                st.error("해당 ID의 Change Control이 없습니다.")
+            else:
+                st.session_state["selected_change"] = row
 
         row = st.session_state.get("selected_change")
         if row:
-            st.write(row)
+            st.write("선택된 Change:", row)
 
-            new_status = st.selectbox(
-                "새 상태",
-                ["Draft", "Review", "QA Review", "Approved", "Implemented", "Closed"],
-                index=["Draft", "Review", "QA Review", "Approved", "Implemented", "Closed"].index(row["status"])
-            )
+            status_options = ["Draft", "Review", "QA Review", "Approved", "Implemented", "Closed"]
+            current_status = row.get("status") or "Draft"
+            if current_status in status_options:
+                idx = status_options.index(current_status)
+            else:
+                idx = 0
+
+            new_status = st.selectbox("새 상태", status_options, index=idx)
 
             if st.button("상태 업데이트"):
-                old = row["status"]
-
-                q("UPDATE change_controls SET status=%s, updated_at=NOW() WHERE id=%s",
-                  (new_status, row["id"]), commit=True)
-
-                log_action(
-                    st.session_state["user"]["id"], "STATUS_CHANGE",
-                    "CHANGE", row["change_id"], field="status", old=old, new=new_status
+                old_status = current_status
+                q(
+                    "UPDATE change_controls SET status=%s, updated_at=NOW() WHERE id=%s",
+                    (new_status, row["id"]),
+                    commit=True,
                 )
 
-                st.success("상태 변경 완료")
+                log_action(
+                    user["id"],
+                    "STATUS_CHANGE",
+                    "CHANGE",
+                    row["change_id"],
+                    field_name="status",
+                    old_value=old_status,
+                    new_value=new_status,
+                )
+
+                st.success("상태가 변경되었습니다.")
                 st.rerun()
 
 
 # ====================================================
-# 6. DEVIATION
+# 5. DEVIATION
 # ====================================================
 def page_deviation():
     login_required()
+    user = st.session_state["user"]
+
     st.header("⚠️ Deviation")
 
-    tab_list, tab_new = st.tabs(["목록", "새 일탈 등록"])
+    tab_list, tab_new, tab_status = st.tabs(["목록", "새 일탈 등록", "상태 변경"])
 
-    # LIST
+    # ---------- LIST ----------
     with tab_list:
         require_permission("deviations", "view")
         rows = q("SELECT * FROM deviations ORDER BY detected_time DESC", all=True)
-        st.dataframe(pd.DataFrame(rows) if rows else pd.DataFrame())
+        if rows:
+            st.dataframe(pd.DataFrame(rows), use_container_width=True)
+        else:
+            st.info("등록된 Deviation이 없습니다.")
 
-    # CREATE
+    # ---------- NEW ----------
     with tab_new:
         require_permission("deviations", "create")
 
@@ -275,34 +307,94 @@ def page_deviation():
             VALUES (%s,%s,%s,NOW(),%s,%s,%s,%s,'Open',%s)
             """
 
-            q(sql, (deviation_id, batch_id, description,
-                    immediate_action, preventive_action,
-                    root_cause, risk_eval,
-                    st.session_state["user"]["id"]),
-              commit=True)
+            params = (deviation_id, batch_id, description,
+                      immediate_action, preventive_action,
+                      root_cause, risk_eval, user["id"])
 
-            log_action(st.session_state["user"]["id"],
-                       "CREATE", "DEVIATION", deviation_id,
-                       new=description[:100])
+            q(sql, params, commit=True)
 
-            st.success(f"등록 완료! (ID={deviation_id})")
+            log_action(
+                user["id"], "CREATE", "DEVIATION", deviation_id,
+                new_value=description[:100]
+            )
+
+            st.success(f"등록 완료! (ID = {deviation_id})")
             st.rerun()
+
+    # ---------- STATUS CHANGE ----------
+    with tab_status:
+        # QA / ADMIN 위주이므로 edit 권한 기준
+        require_permission("deviations", "edit")
+
+        dev_id_input = st.text_input("Deviation ID 입력 (예: DEV-20251130-123000)")
+
+        if st.button("Deviation 불러오기"):
+            row = q("SELECT * FROM deviations WHERE deviation_id=%s",
+                    (dev_id_input,), one=True)
+            if not row:
+                st.error("해당 ID의 Deviation이 없습니다.")
+            else:
+                st.session_state["selected_deviation"] = row
+
+        row = st.session_state.get("selected_deviation")
+        if row:
+            st.write("선택된 Deviation:", row)
+
+            status_options = ["Open", "Investigation", "QA Review", "Approved", "Closed"]
+            current_status = row.get("status") or "Open"
+            if current_status in status_options:
+                idx = status_options.index(current_status)
+            else:
+                idx = 0
+
+            new_status = st.selectbox("새 상태", status_options, index=idx)
+
+            if st.button("Deviation 상태 저장"):
+                old_status = current_status
+                sql = """
+                UPDATE deviations
+                   SET status=%s,
+                       updated_by=%s,
+                       updated_at=NOW()
+                 WHERE id=%s
+                """
+                q(sql, (new_status, user["id"], row["id"]), commit=True)
+
+                log_action(
+                    user["id"],
+                    "STATUS_CHANGE",
+                    "DEVIATION",
+                    row["deviation_id"],
+                    field_name="status",
+                    old_value=old_status,
+                    new_value=new_status,
+                )
+
+                st.success("Deviation 상태가 변경되었습니다.")
+                st.rerun()
 
 
 # ====================================================
-# 7. CAPA
+# 6. CAPA
 # ====================================================
 def page_capa():
     login_required()
+    user = st.session_state["user"]
+
     st.header("🛠 CAPA")
 
-    tab_list, tab_new = st.tabs(["목록", "CAPA 생성"])
+    tab_list, tab_new, tab_status = st.tabs(["목록", "CAPA 생성", "상태 변경"])
 
+    # ---------- LIST ----------
     with tab_list:
         require_permission("capa", "view")
         rows = q("SELECT * FROM capas ORDER BY id DESC", all=True)
-        st.dataframe(pd.DataFrame(rows) if rows else pd.DataFrame())
+        if rows:
+            st.dataframe(pd.DataFrame(rows), use_container_width=True)
+        else:
+            st.info("등록된 CAPA가 없습니다.")
 
+    # ---------- NEW ----------
     with tab_new:
         require_permission("capa", "create")
 
@@ -310,7 +402,7 @@ def page_capa():
         st.text(f"자동 생성 CAPA ID: {capa_id}")
 
         from_type = st.selectbox("연계 타입", ["DEVIATION", "CHANGE"])
-        from_id = st.text_input("연계 Object ID")
+        from_id = st.text_input("연계 Object ID (숫자 or 코드)")
 
         action_plan = st.text_area("Action Plan")
         corrective_action = st.text_area("Corrective Action")
@@ -320,7 +412,6 @@ def page_capa():
         progress = st.selectbox("진행 상태", ["Not Started", "In Progress", "Completed"])
 
         if st.button("CAPA 등록"):
-
             sql = """
             INSERT INTO capas
             (capa_id, from_type, from_id, action_plan,
@@ -329,37 +420,100 @@ def page_capa():
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """
 
-            q(sql, (capa_id, from_type, from_id, action_plan,
-                    corrective_action, preventive_action,
-                    owner_id, progress, due_date),
-              commit=True)
+            params = (
+                capa_id, from_type, from_id, action_plan,
+                corrective_action, preventive_action,
+                owner_id, progress, due_date
+            )
 
-            log_action(st.session_state["user"]["id"], "CREATE", "CAPA",
-                       capa_id, new=action_plan[:80])
+            q(sql, params, commit=True)
 
-            st.success(f"CAPA 등록 완료! (ID={capa_id})")
+            log_action(
+                user["id"], "CREATE", "CAPA", capa_id,
+                new_value=action_plan[:80]
+            )
+
+            st.success(f"CAPA 등록 완료! (ID = {capa_id})")
             st.rerun()
+
+    # ---------- STATUS CHANGE ----------
+    with tab_status:
+        require_permission("capa", "edit")
+
+        capa_id_input = st.text_input("CAPA ID 입력 (예: CAPA-20251130-123000)")
+
+        if st.button("CAPA 불러오기"):
+            row = q("SELECT * FROM capas WHERE capa_id=%s",
+                    (capa_id_input,), one=True)
+            if not row:
+                st.error("해당 CAPA ID가 없습니다.")
+            else:
+                st.session_state["selected_capa"] = row
+
+        row = st.session_state.get("selected_capa")
+        if row:
+            st.write("선택된 CAPA:", row)
+
+            progress_options = ["Not Started", "In Progress", "Completed", "Closed"]
+            current_progress = row.get("progress") or "Not Started"
+            if current_progress in progress_options:
+                idx = progress_options.index(current_progress)
+            else:
+                idx = 0
+
+            new_progress = st.selectbox("새 진행 상태", progress_options, index=idx)
+
+            if st.button("CAPA 진행 상태 저장"):
+                old_progress = current_progress
+                sql = """
+                UPDATE capas
+                   SET progress=%s,
+                       updated_by=%s,
+                       updated_at=NOW()
+                 WHERE id=%s
+                """
+                q(sql, (new_progress, user["id"], row["id"]), commit=True)
+
+                log_action(
+                    user["id"],
+                    "STATUS_CHANGE",
+                    "CAPA",
+                    row["capa_id"],
+                    field_name="progress",
+                    old_value=old_progress,
+                    new_value=new_progress,
+                )
+
+                st.success("CAPA 진행 상태가 변경되었습니다.")
+                st.rerun()
 
 
 # ====================================================
-# 8. RISK
+# 7. RISK ASSESSMENT
 # ====================================================
 def page_risk():
     login_required()
-    st.header("📊 Risk Assessment")
+    user = st.session_state["user"]
+
+    st.header("📊 Risk Assessment (RPN)")
 
     tab_list, tab_new = st.tabs(["목록", "Risk 평가 생성"])
 
+    # ---------- LIST ----------
     with tab_list:
         require_permission("risk", "view")
         rows = q("SELECT * FROM risk_assessment ORDER BY created_at DESC", all=True)
-        st.dataframe(pd.DataFrame(rows) if rows else pd.DataFrame())
+        if rows:
+            st.dataframe(pd.DataFrame(rows), use_container_width=True)
+        else:
+            st.info("등록된 Risk 평가가 없습니다.")
 
+    # ---------- NEW ----------
     with tab_new:
         require_permission("risk", "create")
 
         object_type = st.selectbox("Object Type", ["CHANGE", "DEVIATION", "CAPA"])
-        object_id = st.text_input("Object ID")
+        object_id = st.text_input("Object ID (예: CHG-..., DEV-..., CAPA-...)")
 
         sev = st.slider("Severity", 1, 10, 5)
         occ = st.slider("Occurrence", 1, 10, 5)
@@ -376,13 +530,14 @@ def page_risk():
             """
 
             q(sql, (object_type, object_id, sev, occ, det,
-                    risk_score, st.session_state["user"]["id"]),
-              commit=True)
+                    risk_score, user["id"]), commit=True)
 
             log_action(
-                st.session_state["user"]["id"], "CREATE",
-                "RISK", f"{object_type}:{object_id}",
-                new=f"RPN={risk_score}"
+                user["id"],
+                "CREATE",
+                "RISK",
+                f"{object_type}:{object_id}",
+                new_value=f"RPN={risk_score}",
             )
 
             st.success(f"저장 완료! RPN = {risk_score}")
@@ -390,19 +545,24 @@ def page_risk():
 
 
 # ====================================================
-# 9. USER MANAGEMENT (ADMIN)
+# 8. USER MANAGEMENT (ADMIN)
 # ====================================================
 def page_users():
     login_required()
     require_permission("user_management", "create")
 
+    admin = st.session_state["user"]
+
     st.header("👤 사용자 관리 (Admin)")
 
-    tab_list, tab_new = st.tabs(["목록", "새 사용자 생성"])
+    tab_list, tab_new = st.tabs(["사용자 목록", "새 사용자 생성"])
 
     with tab_list:
-        rows = q("SELECT id, username, role, created_at, email FROM users ORDER BY id", all=True)
-        st.dataframe(pd.DataFrame(rows), use_container_width=True)
+        rows = q("SELECT id, username, role, email, created_at FROM users ORDER BY id", all=True)
+        if rows:
+            st.dataframe(pd.DataFrame(rows), use_container_width=True)
+        else:
+            st.info("등록된 사용자가 없습니다.")
 
     with tab_new:
         username = st.text_input("Username")
@@ -411,21 +571,30 @@ def page_users():
         role = st.selectbox("Role", ["OPERATOR", "QA", "QC", "ADMIN"])
 
         if st.button("사용자 생성"):
-            hashed = hash_pw(pw)
+            if not username or not pw:
+                st.warning("Username / Password는 필수입니다.")
+            else:
+                hashed = hash_pw(pw)
+                q(
+                    "INSERT INTO users (username, password_hash, role, email) VALUES (%s,%s,%s,%s)",
+                    (username, hashed, role, email),
+                    commit=True,
+                )
 
-            q("""
-                INSERT INTO users (username, email, password_hash, role)
-                VALUES (%s,%s,%s,%s)
-                """,
-              (username, email, hashed, role),
-              commit=True)
+                log_action(
+                    admin["id"],
+                    "CREATE_USER",
+                    "USER",
+                    username,
+                    new_value=f"role={role}, email={email}",
+                )
 
-            st.success(f"사용자 {username} 생성 완료!")
-            st.rerun()
+                st.success("사용자 생성 완료!")
+                st.rerun()
 
 
 # ====================================================
-# 10. AUDIT TRAIL
+# 9. AUDIT TRAIL
 # ====================================================
 def page_audit():
     login_required()
@@ -433,9 +602,59 @@ def page_audit():
 
     st.header("🧾 Audit Trail")
 
-    rows = q("SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 300", all=True)
+    rows = q(
+        "SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 300",
+        all=True,
+    )
 
-    st.dataframe(pd.DataFrame(rows) if rows else pd.DataFrame())
+    if rows:
+        st.dataframe(pd.DataFrame(rows), use_container_width=True)
+    else:
+        st.info("표시할 Audit 로그가 없습니다.")
+
+
+# ====================================================
+# 10. DASHBOARD
+# ====================================================
+def page_dashboard():
+    login_required()
+    st.header("📊 Dashboard Summary")
+
+    cc = q(
+        "SELECT status, COUNT(*) AS cnt FROM change_controls GROUP BY status",
+        all=True,
+    )
+    dv = q(
+        "SELECT status, COUNT(*) AS cnt FROM deviations GROUP BY status",
+        all=True,
+    )
+    cp = q(
+        "SELECT progress, COUNT(*) AS cnt FROM capas GROUP BY progress",
+        all=True,
+    )
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.subheader("Change Status")
+        if cc:
+            st.dataframe(pd.DataFrame(cc), use_container_width=True)
+        else:
+            st.write("데이터 없음")
+
+    with col2:
+        st.subheader("Deviation Status")
+        if dv:
+            st.dataframe(pd.DataFrame(dv), use_container_width=True)
+        else:
+            st.write("데이터 없음")
+
+    with col3:
+        st.subheader("CAPA Progress")
+        if cp:
+            st.dataframe(pd.DataFrame(cp), use_container_width=True)
+        else:
+            st.write("데이터 없음")
 
 
 # ====================================================
@@ -466,50 +685,22 @@ def main():
             "CAPA",
             "Risk Assessment",
             "Audit Trail",
-            "User Management (Admin)"
-        ]
+            "User Management (Admin)",
+        ],
     )
 
     if menu == "Dashboard":
-        st.header("📊 Dashboard Summary")
-        st.write("변경관리, 일탈, CAPA, 위험평가 통계 요약")
-
-        cc = q("SELECT status, COUNT(*) AS cnt FROM change_controls GROUP BY status", all=True)
-        dv = q("SELECT status, COUNT(*) AS cnt FROM deviations GROUP BY status", all=True)
-        cp = q("SELECT progress, COUNT(*) AS cnt FROM capas GROUP BY progress", all=True)
-
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
-            st.subheader("Change")
-            if cc:
-                st.dataframe(pd.DataFrame(cc))
-
-        with col2:
-            st.subheader("Deviation")
-            if dv:
-                st.dataframe(pd.DataFrame(dv))
-
-        with col3:
-            st.subheader("CAPA")
-            if cp:
-                st.dataframe(pd.DataFrame(cp))
-
+        page_dashboard()
     elif menu == "Change Control":
         page_change_control()
-
     elif menu == "Deviation":
         page_deviation()
-
     elif menu == "CAPA":
         page_capa()
-
     elif menu == "Risk Assessment":
         page_risk()
-
     elif menu == "Audit Trail":
         page_audit()
-
     elif menu == "User Management (Admin)":
         page_users()
 
