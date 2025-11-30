@@ -52,12 +52,7 @@ def apply_custom_css():
             border: none;
         }
         .stButton button:hover { background-color: #1B45C4; }
-
-        .stTextInput > div > div > input,
-        .stTextArea textarea {
-            border-radius: 8px !important;
-            border: 1px solid #D8DEE8 !important;
-        }
+        
         .stDataFrame { border-radius: 8px; }
         </style>
         """,
