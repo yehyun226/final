@@ -265,10 +265,12 @@ def page_change_control():
         rows = q("SELECT * FROM change_controls ORDER BY created_at DESC", all=True)
         if rows:
             st.markdown("<div class='card'>", unsafe_allow_html=True)
-            st.dataframe(pd.DataFrame(rows), use_container_width=True)
-            st.markdown("</div>", unsafe_allow_html=True)
+            df = pd.DataFrame(rows)
+            st.data_editor(df, use_container_width=True, height=400)
         else:
             st.info("등록된 Change Control이 없습니다.")
+            
+
 
     # ---------- NEW ----------
     with tab_new:
