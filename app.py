@@ -16,28 +16,12 @@ def apply_custom_css():
     st.markdown(
         """
         <style>
-        /* 앱 전체 배경 */
-        .stApp {
-            background-color: #FFFFFF !important;
-        }
+        .stApp { background-color: #FFFFFF !important; }
 
-        /* 상단 헤더 영역 */
-        .app-header {
-            text-align: center;
-            padding: 16px 0 28px 0;
-        }
-        .app-header h1 {
-            margin-top: 10px;
-            font-size: 30px;
-            font-weight: 700;
-        }
-        .app-header p {
-            margin-top: 4px;
-            color: #666;
-            font-size: 14px;
-        }
+        .app-header { text-align: center; padding: 16px 0 28px 0; }
+        .app-header h1 { margin-top: 10px; font-size: 30px; font-weight: 700; }
+        .app-header p { margin-top: 4px; color: #666; font-size: 14px; }
 
-        /* 카드 공통 스타일 */
         .card {
             background: #FFFFFF;
             padding: 20px;
@@ -47,7 +31,6 @@ def apply_custom_css():
             margin-bottom: 24px;
         }
 
-        /* 섹션 헤더 박스 */
         .header-box {
             padding: 12px 18px;
             background:#FFFFFF;
@@ -55,22 +38,11 @@ def apply_custom_css():
             border:1px solid #E5E9F0;
             margin-bottom:20px;
         }
-        .header-box h2 {
-            margin:0;
-            font-size: 24px;
-        }
-        .header-box p {
-            color:#555;
-            margin-top:6px;
-            font-size: 14px;
-        }
+        .header-box h2 { margin:0; font-size: 24px; }
+        .header-box p { color:#555; margin-top:6px; font-size: 14px; }
 
-        /* 사이드바 */
-        section[data-testid="stSidebar"] {
-            background-color: #F5F7FA !important;
-        }
+        section[data-testid="stSidebar"] { background-color: #F5F7FA !important; }
 
-        /* 버튼 스타일 */
         .stButton button {
             border-radius: 8px;
             padding: 8px 18px;
@@ -78,21 +50,14 @@ def apply_custom_css():
             color: white;
             border: none;
         }
-        .stButton button:hover {
-            background-color: #1B45C4;
-        }
+        .stButton button:hover { background-color: #1B45C4; }
 
-        /* 입력 폼 */
         .stTextInput > div > div > input,
         .stTextArea textarea {
             border-radius: 8px !important;
             border: 1px solid #D8DEE8 !important;
         }
-
-        /* 데이터프레임 table 여백 조금 */
-        .stDataFrame {
-            border-radius: 8px;
-        }
+        .stDataFrame { border-radius: 8px; }
         </style>
         """,
         unsafe_allow_html=True,
@@ -171,13 +136,13 @@ ROLE_PERMISSIONS = {
         "risk": ["create", "edit", "delete", "approve", "view"],
         "attachments": ["upload", "delete", "view_all"],
         "user_management": ["create", "edit", "delete", "assign_roles"],
-        "audit_logs": ["view_all"],  # view_all 도 view 허용
+        "audit_logs": ["view_all"],
     },
 }
 
 
 # ====================================================
-# 2. AUTH / PERMISSION
+# 2. AUTH / LOGIN
 # ====================================================
 def hash_pw(pw: str) -> str:
     return bcrypt.hashpw(pw.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
@@ -202,7 +167,6 @@ def require_permission(module: str, action: str):
     role = user["role"]
     allowed = ROLE_PERMISSIONS.get(role, {}).get(module, [])
 
-    # ADMIN 의 view_all 을 view 로 인정
     if action == "view" and "view_all" in allowed:
         return
 
@@ -243,7 +207,7 @@ def login_screen():
 
 
 # ====================================================
-# 3. AUDIT TRAIL LOG
+# 3. AUDIT LOG
 # ====================================================
 def log_action(user_id, action_type, obj_type, obj_id,
                field_name=None, old_value=None, new_value=None):
@@ -277,6 +241,7 @@ def generate_risk_id():
 
 # ====================================================
 # 5. CHANGE CONTROL
+# (기존 유지, 변화 없음)
 # ====================================================
 def page_change_control():
     login_required()
@@ -286,7 +251,7 @@ def page_change_control():
         """
         <div class="header-box">
             <h2>📋 Change Control</h2>
-            <p>공정·설비·시험법·원자재 등의 변경을 등록하고 상태를 추적하는 영역입니다.</p>
+            <p>공정·설비·시험법·원자재 등의 변경을 등록하고 상태를 추적합니다.</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -332,17 +297,20 @@ def page_change_control():
                  created_by, status)
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
                 """
-                params = (change_id, title, ctype, description,
-                          impact, risk_level, user["id"], "Draft")
+                params = (
+                    change_id, title, ctype, description,
+                    impact, risk_level, user["id"], "Draft"
+                )
+
                 q(sql, params, commit=True)
 
-                log_action(user["id"], "CREATE", "CHANGE", change_id,
-                           new_value=title)
+                log_action(user["id"], "CREATE", "CHANGE", change_id, new_value=title)
 
                 st.session_state.pop("new_change_id", None)
 
                 st.success(f"등록 완료! (ID = {change_id})")
                 st.rerun()
+
         st.markdown("</div>", unsafe_allow_html=True)
 
     # ---------- STATUS CHANGE ----------
@@ -350,13 +318,12 @@ def page_change_control():
         require_permission("change_control", "edit")
 
         st.markdown("<div class='card'>", unsafe_allow_html=True)
-        cid = st.text_input("Change ID 입력 (예: CHG-XXXXXXXX)")
+        cid = st.text_input("Change ID 입력")
 
         if st.button("불러오기"):
-            row = q("SELECT * FROM change_controls WHERE change_id=%s",
-                    (cid,), one=True)
+            row = q("SELECT * FROM change_controls WHERE change_id=%s", (cid,), one=True)
             if not row:
-                st.error("해당 ID의 Change Control이 없습니다.")
+                st.error("해당 ID 없음")
             else:
                 st.session_state["selected_change"] = row
 
@@ -365,13 +332,12 @@ def page_change_control():
             st.write("선택된 Change:", row)
 
             status_options = ["Draft", "Review", "QA Review", "Approved", "Implemented", "Closed"]
-            current_status = row.get("status") or "Draft"
-            idx = status_options.index(current_status) if current_status in status_options else 0
+            cur = row.get("status") or "Draft"
+            idx = status_options.index(cur) if cur in status_options else 0
 
             new_status = st.selectbox("새 상태", status_options, index=idx)
 
             if st.button("상태 업데이트"):
-                old_status = current_status
                 q(
                     "UPDATE change_controls SET status=%s, updated_at=NOW() WHERE id=%s",
                     (new_status, row["id"]),
@@ -379,22 +345,19 @@ def page_change_control():
                 )
 
                 log_action(
-                    user["id"],
-                    "STATUS_CHANGE",
-                    "CHANGE",
+                    user["id"], "STATUS_CHANGE", "CHANGE",
                     row["change_id"],
-                    field_name="status",
-                    old_value=old_status,
-                    new_value=new_status,
+                    "status", cur, new_status
                 )
 
-                st.success("상태가 변경되었습니다.")
+                st.success("상태 변경 완료")
                 st.rerun()
+
         st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ====================================================
-# 6. DEVIATION
+# 6. DEVIATION (Batch ID 삭제 + Title 추가)
 # ====================================================
 def page_deviation():
     login_required()
@@ -431,7 +394,7 @@ def page_deviation():
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.text(f"자동 생성 Deviation ID: {deviation_id}")
 
-        batch_id = st.text_input("Batch ID")
+        title = st.text_input("Deviation 제목", placeholder="예: 중량 이탈 발생")
         description = st.text_area("Deviation 상세 내용")
         immediate_action = st.text_area("즉시 조치")
         preventive_action = st.text_area("예방 조치")
@@ -439,27 +402,33 @@ def page_deviation():
         risk_eval = st.selectbox("Risk 평가", ["Low", "Medium", "High"])
 
         if st.button("Deviation 등록"):
-            sql = """
-            INSERT INTO deviations
-            (deviation_id, batch_id, description, detected_time,
-             immediate_action, preventive_action, root_cause,
-             risk_eval, status, created_by)
-            VALUES (%s,%s,%s,NOW(),%s,%s,%s,%s,'Open',%s)
-            """
+            if not title or not description:
+                st.warning("제목과 상세 내용은 필수입니다.")
+            else:
+                sql = """
+                INSERT INTO deviations
+                (deviation_id, title, description, detected_time,
+                 immediate_action, preventive_action, root_cause,
+                 risk_eval, status, created_by)
+                VALUES (%s,%s,%s,NOW(),%s,%s,%s,%s,'Open',%s)
+                """
 
-            params = (deviation_id, batch_id, description,
-                      immediate_action, preventive_action,
-                      root_cause, risk_eval, user["id"])
+                params = (
+                    deviation_id, title, description,
+                    immediate_action, preventive_action,
+                    root_cause, risk_eval, user["id"]
+                )
 
-            q(sql, params, commit=True)
+                q(sql, params, commit=True)
 
-            log_action(
-                user["id"], "CREATE", "DEVIATION", deviation_id,
-                new_value=description[:100]
-            )
+                log_action(
+                    user["id"], "CREATE", "DEVIATION",
+                    deviation_id, new_value=title
+                )
 
-            st.success(f"등록 완료! (ID = {deviation_id})")
-            st.rerun()
+                st.success(f"Deviation 등록 완료! (ID = {deviation_id})")
+                st.rerun()
+
         st.markdown("</div>", unsafe_allow_html=True)
 
     # ---------- STATUS CHANGE ----------
@@ -467,13 +436,13 @@ def page_deviation():
         require_permission("deviations", "edit")
 
         st.markdown("<div class='card'>", unsafe_allow_html=True)
-        dev_id_input = st.text_input("Deviation ID 입력 (예: DEV-YYYYMMDD-HHMMSS)")
+        dev_id_input = st.text_input("Deviation ID 입력")
 
         if st.button("Deviation 불러오기"):
             row = q("SELECT * FROM deviations WHERE deviation_id=%s",
                     (dev_id_input,), one=True)
             if not row:
-                st.error("해당 ID의 Deviation이 없습니다.")
+                st.error("해당 ID의 Deviation 없음")
             else:
                 st.session_state["selected_deviation"] = row
 
@@ -482,39 +451,40 @@ def page_deviation():
             st.write("선택된 Deviation:", row)
 
             status_options = ["Open", "Investigation", "QA Review", "Approved", "Closed"]
-            current_status = row.get("status") or "Open"
-            idx = status_options.index(current_status) if current_status in status_options else 0
+            cur = row.get("status") or "Open"
+            idx = status_options.index(cur) if cur in status_options else 0
 
             new_status = st.selectbox("새 상태", status_options, index=idx)
 
             if st.button("Deviation 상태 저장"):
-                old_status = current_status
-                sql = """
-                UPDATE deviations
-                   SET status=%s,
-                       updated_by=%s,
-                       updated_at=NOW()
-                 WHERE id=%s
-                """
-                q(sql, (new_status, user["id"], row["id"]), commit=True)
+                q(
+                    """
+                    UPDATE deviations
+                       SET status=%s,
+                           updated_by=%s,
+                           updated_at=NOW()
+                     WHERE id=%s
+                    """,
+                    (new_status, user["id"], row["id"]),
+                    commit=True,
+                )
 
                 log_action(
                     user["id"],
                     "STATUS_CHANGE",
                     "DEVIATION",
                     row["deviation_id"],
-                    field_name="status",
-                    old_value=old_status,
-                    new_value=new_status,
+                    "status", cur, new_status
                 )
 
-                st.success("Deviation 상태가 변경되었습니다.")
+                st.success("Deviation 상태 변경 완료")
                 st.rerun()
+
         st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ====================================================
-# 7. CAPA
+# 7. CAPA (연계 ID 삭제 + Title 추가)
 # ====================================================
 def page_capa():
     login_required()
@@ -551,40 +521,45 @@ def page_capa():
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.text(f"자동 생성 CAPA ID: {capa_id}")
 
-        from_type = st.selectbox("연계 타입", ["DEVIATION", "CHANGE"])
-        from_id = st.text_input("연계 Object ID (숫자 or 코드)")
+        capa_title = st.text_input("CAPA 제목", placeholder="예: 공정 오염 가능성 예방 조치")
 
+        from_type = st.selectbox("연계 타입", ["DEVIATION", "CHANGE"])
         action_plan = st.text_area("Action Plan")
         corrective_action = st.text_area("Corrective Action")
         preventive_action = st.text_area("Preventive Action")
+
         owner_id = st.number_input("담당자 User ID", min_value=1)
         due_date = st.date_input("Due Date", date.today())
         progress = st.selectbox("진행 상태", ["Not Started", "In Progress", "Completed"])
 
         if st.button("CAPA 등록"):
-            sql = """
-            INSERT INTO capas
-            (capa_id, from_type, from_id, action_plan,
-             corrective_action, preventive_action,
-             owner_id, progress, due_date)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            """
+            if not capa_title or not action_plan:
+                st.warning("제목과 Action Plan은 필수입니다.")
+            else:
+                sql = """
+                INSERT INTO capas
+                (capa_id, title, from_type, action_plan,
+                 corrective_action, preventive_action,
+                 owner_id, progress, due_date)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """
 
-            params = (
-                capa_id, from_type, from_id, action_plan,
-                corrective_action, preventive_action,
-                owner_id, progress, due_date
-            )
+                params = (
+                    capa_id, capa_title, from_type,
+                    action_plan, corrective_action, preventive_action,
+                    owner_id, progress, due_date
+                )
 
-            q(sql, params, commit=True)
+                q(sql, params, commit=True)
 
-            log_action(
-                user["id"], "CREATE", "CAPA", capa_id,
-                new_value=action_plan[:80]
-            )
+                log_action(
+                    user["id"], "CREATE", "CAPA",
+                    capa_id, new_value=capa_title
+                )
 
-            st.success(f"CAPA 등록 완료! (ID = {capa_id})")
-            st.rerun()
+                st.success(f"CAPA 등록 완료! (ID = {capa_id})")
+                st.rerun()
+
         st.markdown("</div>", unsafe_allow_html=True)
 
     # ---------- STATUS CHANGE ----------
@@ -592,13 +567,13 @@ def page_capa():
         require_permission("capa", "edit")
 
         st.markdown("<div class='card'>", unsafe_allow_html=True)
-        capa_id_input = st.text_input("CAPA ID 입력 (예: CAPA-YYYYMMDD-HHMMSS)")
+        capa_id_input = st.text_input("CAPA ID 입력")
 
         if st.button("CAPA 불러오기"):
             row = q("SELECT * FROM capas WHERE capa_id=%s",
                     (capa_id_input,), one=True)
             if not row:
-                st.error("해당 CAPA ID가 없습니다.")
+                st.error("해당 CAPA 없음")
             else:
                 st.session_state["selected_capa"] = row
 
@@ -607,39 +582,40 @@ def page_capa():
             st.write("선택된 CAPA:", row)
 
             progress_options = ["Not Started", "In Progress", "Completed", "Closed"]
-            current_progress = row.get("progress") or "Not Started"
-            idx = progress_options.index(current_progress) if current_progress in progress_options else 0
+            cur = row.get("progress") or "Not Started"
+            idx = progress_options.index(cur) if cur in progress_options else 0
 
             new_progress = st.selectbox("새 진행 상태", progress_options, index=idx)
 
             if st.button("CAPA 진행 상태 저장"):
-                old_progress = current_progress
-                sql = """
-                UPDATE capas
-                   SET progress=%s,
-                       updated_by=%s,
-                       updated_at=NOW()
-                 WHERE id=%s
-                """
-                q(sql, (new_progress, user["id"], row["id"]), commit=True)
+                q(
+                    """
+                    UPDATE capas
+                       SET progress=%s,
+                           updated_by=%s,
+                           updated_at=NOW()
+                     WHERE id=%s
+                    """,
+                    (new_progress, user["id"], row["id"]),
+                    commit=True,
+                )
 
                 log_action(
                     user["id"],
                     "STATUS_CHANGE",
                     "CAPA",
                     row["capa_id"],
-                    field_name="progress",
-                    old_value=old_progress,
-                    new_value=new_progress,
+                    "progress", cur, new_progress
                 )
 
-                st.success("CAPA 진행 상태가 변경되었습니다.")
+                st.success("CAPA 상태 변경 완료")
                 st.rerun()
+
         st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ====================================================
-# 8. RISK ASSESSMENT
+# 8. RISK ASSESSMENT (Object ID 삭제 + Title 추가)
 # ====================================================
 def page_risk():
     login_required()
@@ -649,7 +625,7 @@ def page_risk():
         """
         <div class="header-box">
             <h2>📊 Risk Assessment (RPN)</h2>
-            <p>변경·일탈·CAPA 건에 대한 Risk Priority Number(RPN)를 산정하고 상태를 관리합니다.</p>
+            <p>변경·일탈·CAPA 건에 대한 Risk Priority Number를 산정합니다.</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -679,8 +655,8 @@ def page_risk():
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.text(f"자동 생성 Risk ID: {risk_id}")
 
+        risk_title = st.text_input("Risk Assessment 제목", placeholder="예: 작업자 실수 가능성 증가에 대한 RPN 평가")
         object_type = st.selectbox("Object Type", ["CHANGE", "DEVIATION", "CAPA"])
-        object_id = st.text_input("Object ID (예: CHG-..., DEV-..., CAPA-...)")
 
         sev = st.slider("Severity", 1, 10, 5)
         occ = st.slider("Occurrence", 1, 10, 5)
@@ -691,26 +667,27 @@ def page_risk():
 
             sql = """
             INSERT INTO risk_assessment
-            (risk_id, object_type, object_id, severity, occurrence,
+            (risk_id, title, object_type, severity, occurrence,
              detection, risk_score, status, created_by)
             VALUES (%s,%s,%s,%s,%s,%s,%s,'Draft',%s)
             """
 
-            q(sql, (risk_id, object_type, object_id, sev, occ, det,
-                    risk_score, user["id"]), commit=True)
+            q(
+                sql,
+                (risk_id, risk_title, object_type, sev, occ, det, risk_score, user["id"]),
+                commit=True,
+            )
 
             log_action(
-                user["id"],
-                "CREATE",
-                "RISK",
-                risk_id,
-                new_value=f"{object_type}:{object_id}, RPN={risk_score}",
+                user["id"], "CREATE", "RISK", risk_id,
+                new_value=f"{risk_title} (RPN={risk_score})"
             )
 
             st.session_state.pop("new_risk_id", None)
 
             st.success(f"저장 완료! (Risk ID = {risk_id}, RPN = {risk_score})")
             st.rerun()
+
         st.markdown("</div>", unsafe_allow_html=True)
 
     # ---------- STATUS CHANGE ----------
@@ -718,12 +695,13 @@ def page_risk():
         require_permission("risk", "edit")
 
         st.markdown("<div class='card'>", unsafe_allow_html=True)
-        rid_input = st.text_input("Risk ID 입력 (예: RISK-XXXXXXXX)")
+        rid_input = st.text_input("Risk ID 입력")
 
         if st.button("Risk 평가 불러오기"):
-            row = q("SELECT * FROM risk_assessment WHERE risk_id=%s", (rid_input,), one=True)
+            row = q("SELECT * FROM risk_assessment WHERE risk_id=%s",
+                    (rid_input,), one=True)
             if not row:
-                st.error("해당 Risk ID가 없습니다.")
+                st.error("해당 ID 없음")
             else:
                 st.session_state["selected_risk"] = row
 
@@ -732,19 +710,14 @@ def page_risk():
             st.write("선택된 Risk 평가:", row)
 
             status_options = ["Draft", "Reviewed", "Approved", "Closed"]
-            current_status = row.get("status") or "Draft"
-            idx = status_options.index(current_status) if current_status in status_options else 0
+            cur = row.get("status") or "Draft"
+            idx = status_options.index(cur) if cur in status_options else 0
 
             new_status = st.selectbox("새 상태", status_options, index=idx)
 
             if st.button("Risk 상태 저장"):
-                old_status = current_status
                 q(
-                    """
-                    UPDATE risk_assessment
-                       SET status=%s
-                     WHERE id=%s
-                    """,
+                    "UPDATE risk_assessment SET status=%s WHERE id=%s",
                     (new_status, row["id"]),
                     commit=True,
                 )
@@ -754,18 +727,17 @@ def page_risk():
                     "STATUS_CHANGE",
                     "RISK",
                     row["risk_id"],
-                    field_name="status",
-                    old_value=old_status,
-                    new_value=new_status,
+                    "status", cur, new_status
                 )
 
-                st.success("Risk 상태가 변경되었습니다.")
+                st.success("Risk 상태 변경 완료")
                 st.rerun()
+
         st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ====================================================
-# 9. USER MANAGEMENT (ADMIN)
+# 9. USER MANAGEMENT (Admin)
 # ====================================================
 def page_users():
     login_required()
@@ -777,7 +749,7 @@ def page_users():
         """
         <div class="header-box">
             <h2>👤 사용자 관리 (Admin)</h2>
-            <p>계정 생성, 권한(Role) 부여 등을 관리하는 영역입니다.</p>
+            <p>계정 생성, 권한(Role) 부여 등을 관리합니다.</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -822,6 +794,7 @@ def page_users():
 
                 st.success("사용자 생성 완료!")
                 st.rerun()
+
         st.markdown("</div>", unsafe_allow_html=True)
 
 
@@ -842,10 +815,7 @@ def page_audit():
         unsafe_allow_html=True,
     )
 
-    rows = q(
-        "SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 300",
-        all=True,
-    )
+    rows = q("SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 300", all=True)
 
     if rows:
         st.markdown("<div class='card'>", unsafe_allow_html=True)
@@ -856,7 +826,7 @@ def page_audit():
 
 
 # ====================================================
-# 11. DASHBOARD
+# 11. DASHBOARD (그대로 유지)
 # ====================================================
 def page_dashboard():
     login_required()
@@ -871,18 +841,9 @@ def page_dashboard():
         unsafe_allow_html=True,
     )
 
-    cc = q(
-        "SELECT status, COUNT(*) AS cnt FROM change_controls GROUP BY status",
-        all=True,
-    )
-    dv = q(
-        "SELECT status, COUNT(*) AS cnt FROM deviations GROUP BY status",
-        all=True,
-    )
-    cp = q(
-        "SELECT progress, COUNT(*) AS cnt FROM capas GROUP BY progress",
-        all=True,
-    )
+    cc = q("SELECT status, COUNT(*) AS cnt FROM change_controls GROUP BY status", all=True)
+    dv = q("SELECT status, COUNT(*) AS cnt FROM deviations GROUP BY status", all=True)
+    cp = q("SELECT progress, COUNT(*) AS cnt FROM capas GROUP BY progress", all=True)
 
     col1, col2, col3 = st.columns(3)
 
@@ -921,7 +882,6 @@ def main():
     st.set_page_config(page_title="GMP QMS", layout="wide")
     apply_custom_css()
 
-    # 상단 공통 헤더
     st.markdown(
         """
         <div class="app-header">
