@@ -83,7 +83,7 @@ ROLE_PERMISSIONS = {
         "risk": ["create", "edit", "delete", "approve", "view"],
         "attachments": ["upload", "delete", "view_all"],
         "user_management": ["create", "edit", "delete", "assign_roles"],
-        "audit_logs": ["view_all"]
+        "audit_logs": ["view", "view_all"]
     }
 }
 
