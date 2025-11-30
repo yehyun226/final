@@ -6,7 +6,7 @@ import streamlit as st
 import pymysql
 import pandas as pd
 import bcrypt
-import uuid  # ← Change ID 생성을 위한 uuid
+import uuid  # ID 자동 생성용
 
 
 # ====================================================
@@ -81,7 +81,7 @@ ROLE_PERMISSIONS = {
         "risk": ["create", "edit", "delete", "approve", "view"],
         "attachments": ["upload", "delete", "view_all"],
         "user_management": ["create", "edit", "delete", "assign_roles"],
-        "audit_logs": ["view_all"],  # view_all 은 view 로도 인정해줄 거라서 이렇게 둠
+        "audit_logs": ["view_all"],  # view_all 도 view 허용
     },
 }
 
@@ -164,13 +164,29 @@ def log_action(user_id, action_type, obj_type, obj_id,
 
 
 # ====================================================
-# 4. CHANGE CONTROL
+# 4. ID GENERATORS
 # ====================================================
 def generate_change_id():
-    """CHG- + 8자리 UUID 조각으로 변경 ID 생성"""
+    """CHG- + 8자리 UUID 조각"""
     return "CHG-" + uuid.uuid4().hex[:8].upper()
 
 
+def generate_capa_id():
+    return "CAPA-" + datetime.now().strftime("%Y%m%d-%H%M%S")
+
+
+def generate_deviation_id():
+    return "DEV-" + datetime.now().strftime("%Y%m%d-%H%M%S")
+
+
+def generate_risk_id():
+    """RISK- + 8자리 UUID 조각"""
+    return "RISK-" + uuid.uuid4().hex[:8].upper()
+
+
+# ====================================================
+# 5. CHANGE CONTROL
+# ====================================================
 def page_change_control():
     login_required()
     user = st.session_state["user"]
@@ -192,6 +208,13 @@ def page_change_control():
     with tab_new:
         require_permission("change_control", "create")
 
+        # 자동 ID 미리 생성해서 보여주기
+        if "new_change_id" not in st.session_state:
+            st.session_state["new_change_id"] = generate_change_id()
+        change_id = st.session_state["new_change_id"]
+
+        st.text(f"자동 생성 Change ID: {change_id}")
+
         title = st.text_input("변경 제목")
         ctype = st.selectbox("변경 유형", ["공정 변경", "설비 변경", "시험법 변경", "원자재 변경"])
         description = st.text_area("Detail Description")
@@ -202,8 +225,6 @@ def page_change_control():
             if not title or not description:
                 st.warning("제목과 설명은 필수입니다.")
             else:
-                change_id = generate_change_id()
-
                 sql = """
                 INSERT INTO change_controls
                 (change_id, title, type, description, impact, risk_level,
@@ -217,12 +238,14 @@ def page_change_control():
                 log_action(user["id"], "CREATE", "CHANGE", change_id,
                            new_value=title)
 
+                # 사용한 ID는 버리고, 다음 생성 시 새로 만들도록
+                st.session_state.pop("new_change_id", None)
+
                 st.success(f"등록 완료! (ID = {change_id})")
                 st.rerun()
 
     # ---------- STATUS CHANGE ----------
     with tab_status:
-        # QA / ADMIN 정도만 사용하게 할 거면 'edit' 기준
         require_permission("change_control", "edit")
 
         cid = st.text_input("Change ID 입력 (예: CHG-XXXXXXXX)")
@@ -241,10 +264,7 @@ def page_change_control():
 
             status_options = ["Draft", "Review", "QA Review", "Approved", "Implemented", "Closed"]
             current_status = row.get("status") or "Draft"
-            if current_status in status_options:
-                idx = status_options.index(current_status)
-            else:
-                idx = 0
+            idx = status_options.index(current_status) if current_status in status_options else 0
 
             new_status = st.selectbox("새 상태", status_options, index=idx)
 
@@ -271,7 +291,7 @@ def page_change_control():
 
 
 # ====================================================
-# 5. DEVIATION
+# 6. DEVIATION
 # ====================================================
 def page_deviation():
     login_required()
@@ -294,8 +314,8 @@ def page_deviation():
     with tab_new:
         require_permission("deviations", "create")
 
-        deviation_id = "DEV-" + datetime.now().strftime("%Y%m%d-%H%M%S")
-        st.text(f"자동 생성 ID: {deviation_id}")
+        deviation_id = generate_deviation_id()
+        st.text(f"자동 생성 Deviation ID: {deviation_id}")
 
         batch_id = st.text_input("Batch ID")
         description = st.text_area("Deviation 상세 내용")
@@ -329,7 +349,6 @@ def page_deviation():
 
     # ---------- STATUS CHANGE ----------
     with tab_status:
-        # QA / ADMIN 위주이므로 edit 권한 기준
         require_permission("deviations", "edit")
 
         dev_id_input = st.text_input("Deviation ID 입력 (예: DEV-YYYYMMDD-HHMMSS)")
@@ -348,10 +367,7 @@ def page_deviation():
 
             status_options = ["Open", "Investigation", "QA Review", "Approved", "Closed"]
             current_status = row.get("status") or "Open"
-            if current_status in status_options:
-                idx = status_options.index(current_status)
-            else:
-                idx = 0
+            idx = status_options.index(current_status) if current_status in status_options else 0
 
             new_status = st.selectbox("새 상태", status_options, index=idx)
 
@@ -381,7 +397,7 @@ def page_deviation():
 
 
 # ====================================================
-# 6. CAPA
+# 7. CAPA
 # ====================================================
 def page_capa():
     login_required()
@@ -404,7 +420,7 @@ def page_capa():
     with tab_new:
         require_permission("capa", "create")
 
-        capa_id = "CAPA-" + datetime.now().strftime("%Y%m%d-%H%M%S")
+        capa_id = generate_capa_id()
         st.text(f"자동 생성 CAPA ID: {capa_id}")
 
         from_type = st.selectbox("연계 타입", ["DEVIATION", "CHANGE"])
@@ -462,10 +478,7 @@ def page_capa():
 
             progress_options = ["Not Started", "In Progress", "Completed", "Closed"]
             current_progress = row.get("progress") or "Not Started"
-            if current_progress in progress_options:
-                idx = progress_options.index(current_progress)
-            else:
-                idx = 0
+            idx = progress_options.index(current_progress) if current_progress in progress_options else 0
 
             new_progress = st.selectbox("새 진행 상태", progress_options, index=idx)
 
@@ -495,7 +508,7 @@ def page_capa():
 
 
 # ====================================================
-# 7. RISK ASSESSMENT
+# 8. RISK ASSESSMENT
 # ====================================================
 def page_risk():
     login_required()
@@ -518,6 +531,13 @@ def page_risk():
     with tab_new:
         require_permission("risk", "create")
 
+        # risk_id 자동 생성 + 표시
+        if "new_risk_id" not in st.session_state:
+            st.session_state["new_risk_id"] = generate_risk_id()
+        risk_id = st.session_state["new_risk_id"]
+
+        st.text(f"자동 생성 Risk ID: {risk_id}")
+
         object_type = st.selectbox("Object Type", ["CHANGE", "DEVIATION", "CAPA"])
         object_id = st.text_input("Object ID (예: CHG-..., DEV-..., CAPA-...)")
 
@@ -530,35 +550,37 @@ def page_risk():
 
             sql = """
             INSERT INTO risk_assessment
-            (object_type, object_id, severity, occurrence,
-             detection, risk_score, created_by)
-            VALUES (%s,%s,%s,%s,%s,%s,%s)
+            (risk_id, object_type, object_id, severity, occurrence,
+             detection, risk_score, status, created_by)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,'Draft',%s)
             """
 
-            q(sql, (object_type, object_id, sev, occ, det,
+            q(sql, (risk_id, object_type, object_id, sev, occ, det,
                     risk_score, user["id"]), commit=True)
 
             log_action(
                 user["id"],
                 "CREATE",
                 "RISK",
-                f"{object_type}:{object_id}",
-                new_value=f"RPN={risk_score}",
+                risk_id,
+                new_value=f"{object_type}:{object_id}, RPN={risk_score}",
             )
 
-            st.success(f"저장 완료! RPN = {risk_score}")
+            st.session_state.pop("new_risk_id", None)
+
+            st.success(f"저장 완료! (Risk ID = {risk_id}, RPN = {risk_score})")
             st.rerun()
 
     # ---------- STATUS CHANGE ----------
     with tab_status:
         require_permission("risk", "edit")
 
-        rid = st.number_input("Risk Assessment ID (PK id) 입력", min_value=1)
+        rid_input = st.text_input("Risk ID 입력 (예: RISK-XXXXXXXX)")
 
         if st.button("Risk 평가 불러오기"):
-            row = q("SELECT * FROM risk_assessment WHERE id=%s", (rid,), one=True)
+            row = q("SELECT * FROM risk_assessment WHERE risk_id=%s", (rid_input,), one=True)
             if not row:
-                st.error("해당 Risk Assessment가 없습니다.")
+                st.error("해당 Risk ID가 없습니다.")
             else:
                 st.session_state["selected_risk"] = row
 
@@ -568,10 +590,7 @@ def page_risk():
 
             status_options = ["Draft", "Reviewed", "Approved", "Closed"]
             current_status = row.get("status") or "Draft"
-            if current_status in status_options:
-                idx = status_options.index(current_status)
-            else:
-                idx = 0
+            idx = status_options.index(current_status) if current_status in status_options else 0
 
             new_status = st.selectbox("새 상태", status_options, index=idx)
 
@@ -591,7 +610,7 @@ def page_risk():
                     user["id"],
                     "STATUS_CHANGE",
                     "RISK",
-                    f"{row['object_type']}:{row['object_id']}",
+                    row["risk_id"],
                     field_name="status",
                     old_value=old_status,
                     new_value=new_status,
@@ -602,7 +621,7 @@ def page_risk():
 
 
 # ====================================================
-# 8. USER MANAGEMENT (ADMIN)
+# 9. USER MANAGEMENT (ADMIN)
 # ====================================================
 def page_users():
     login_required()
@@ -651,7 +670,7 @@ def page_users():
 
 
 # ====================================================
-# 9. AUDIT TRAIL
+# 10. AUDIT TRAIL
 # ====================================================
 def page_audit():
     login_required()
@@ -671,7 +690,7 @@ def page_audit():
 
 
 # ====================================================
-# 10. DASHBOARD
+# 11. DASHBOARD
 # ====================================================
 def page_dashboard():
     login_required()
@@ -715,7 +734,7 @@ def page_dashboard():
 
 
 # ====================================================
-# 11. MAIN
+# 12. MAIN
 # ====================================================
 def main():
     st.set_page_config(page_title="GMP QMS", layout="wide")
