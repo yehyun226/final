@@ -10,6 +10,96 @@ import uuid  # ID 자동 생성용
 
 
 # ====================================================
+# A. GLOBAL UI THEME (CSS)
+# ====================================================
+def apply_custom_css():
+    st.markdown(
+        """
+        <style>
+        /* 앱 전체 배경 */
+        .stApp {
+            background-color: #FFFFFF !important;
+        }
+
+        /* 상단 헤더 영역 */
+        .app-header {
+            text-align: center;
+            padding: 16px 0 28px 0;
+        }
+        .app-header h1 {
+            margin-top: 10px;
+            font-size: 30px;
+            font-weight: 700;
+        }
+        .app-header p {
+            margin-top: 4px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        /* 카드 공통 스타일 */
+        .card {
+            background: #FFFFFF;
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #E5E9F0;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+            margin-bottom: 24px;
+        }
+
+        /* 섹션 헤더 박스 */
+        .header-box {
+            padding: 12px 18px;
+            background:#FFFFFF;
+            border-radius:10px;
+            border:1px solid #E5E9F0;
+            margin-bottom:20px;
+        }
+        .header-box h2 {
+            margin:0;
+            font-size: 24px;
+        }
+        .header-box p {
+            color:#555;
+            margin-top:6px;
+            font-size: 14px;
+        }
+
+        /* 사이드바 */
+        section[data-testid="stSidebar"] {
+            background-color: #F5F7FA !important;
+        }
+
+        /* 버튼 스타일 */
+        .stButton button {
+            border-radius: 8px;
+            padding: 8px 18px;
+            background-color: #2D5BE3;
+            color: white;
+            border: none;
+        }
+        .stButton button:hover {
+            background-color: #1B45C4;
+        }
+
+        /* 입력 폼 */
+        .stTextInput > div > div > input,
+        .stTextArea textarea {
+            border-radius: 8px !important;
+            border: 1px solid #D8DEE8 !important;
+        }
+
+        /* 데이터프레임 table 여백 조금 */
+        .stDataFrame {
+            border-radius: 8px;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+# ====================================================
 # 0. DB CONNECTION
 # ====================================================
 def db_conn():
@@ -122,7 +212,8 @@ def require_permission(module: str, action: str):
 
 
 def login_screen():
-    st.title("🔐 GMP QMS Login")
+    st.markdown("<div class='card'>", unsafe_allow_html=True)
+    st.markdown("<h2>🔐 GMP QMS Login</h2>", unsafe_allow_html=True)
 
     username = st.text_input("Username")
     pw = st.text_input("Password", type="password")
@@ -147,6 +238,8 @@ def login_screen():
             st.rerun()
         else:
             st.error("비밀번호가 올바르지 않습니다.")
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ====================================================
@@ -189,7 +282,15 @@ def page_change_control():
     login_required()
     user = st.session_state["user"]
 
-    st.header("📋 Change Control")
+    st.markdown(
+        """
+        <div class="header-box">
+            <h2>📋 Change Control</h2>
+            <p>공정·설비·시험법·원자재 등의 변경을 등록하고 상태를 추적하는 영역입니다.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     tab_list, tab_new, tab_status = st.tabs(["목록", "새 변경 생성", "상태 변경"])
 
@@ -198,7 +299,9 @@ def page_change_control():
         require_permission("change_control", "view")
         rows = q("SELECT * FROM change_controls ORDER BY created_at DESC", all=True)
         if rows:
+            st.markdown("<div class='card'>", unsafe_allow_html=True)
             st.dataframe(pd.DataFrame(rows), use_container_width=True)
+            st.markdown("</div>", unsafe_allow_html=True)
         else:
             st.info("등록된 Change Control이 없습니다.")
 
@@ -206,11 +309,11 @@ def page_change_control():
     with tab_new:
         require_permission("change_control", "create")
 
-        # 자동 ID 미리 생성해서 보여주기
         if "new_change_id" not in st.session_state:
             st.session_state["new_change_id"] = generate_change_id()
         change_id = st.session_state["new_change_id"]
 
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.text(f"자동 생성 Change ID: {change_id}")
 
         title = st.text_input("변경 제목")
@@ -236,16 +339,17 @@ def page_change_control():
                 log_action(user["id"], "CREATE", "CHANGE", change_id,
                            new_value=title)
 
-                # 사용한 ID는 버리고, 다음 생성 시 새로 만들도록
                 st.session_state.pop("new_change_id", None)
 
                 st.success(f"등록 완료! (ID = {change_id})")
                 st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
 
     # ---------- STATUS CHANGE ----------
     with tab_status:
         require_permission("change_control", "edit")
 
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
         cid = st.text_input("Change ID 입력 (예: CHG-XXXXXXXX)")
 
         if st.button("불러오기"):
@@ -286,6 +390,7 @@ def page_change_control():
 
                 st.success("상태가 변경되었습니다.")
                 st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ====================================================
@@ -295,7 +400,15 @@ def page_deviation():
     login_required()
     user = st.session_state["user"]
 
-    st.header("⚠️ Deviation")
+    st.markdown(
+        """
+        <div class="header-box">
+            <h2>⚠️ Deviation</h2>
+            <p>일탈 발생 시 등록하고, 조사·조치·종결까지 이력을 관리합니다.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     tab_list, tab_new, tab_status = st.tabs(["목록", "새 일탈 등록", "상태 변경"])
 
@@ -304,7 +417,9 @@ def page_deviation():
         require_permission("deviations", "view")
         rows = q("SELECT * FROM deviations ORDER BY detected_time DESC", all=True)
         if rows:
+            st.markdown("<div class='card'>", unsafe_allow_html=True)
             st.dataframe(pd.DataFrame(rows), use_container_width=True)
+            st.markdown("</div>", unsafe_allow_html=True)
         else:
             st.info("등록된 Deviation이 없습니다.")
 
@@ -313,6 +428,7 @@ def page_deviation():
         require_permission("deviations", "create")
 
         deviation_id = generate_deviation_id()
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.text(f"자동 생성 Deviation ID: {deviation_id}")
 
         batch_id = st.text_input("Batch ID")
@@ -344,11 +460,13 @@ def page_deviation():
 
             st.success(f"등록 완료! (ID = {deviation_id})")
             st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
 
     # ---------- STATUS CHANGE ----------
     with tab_status:
         require_permission("deviations", "edit")
 
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
         dev_id_input = st.text_input("Deviation ID 입력 (예: DEV-YYYYMMDD-HHMMSS)")
 
         if st.button("Deviation 불러오기"):
@@ -392,6 +510,7 @@ def page_deviation():
 
                 st.success("Deviation 상태가 변경되었습니다.")
                 st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ====================================================
@@ -401,7 +520,15 @@ def page_capa():
     login_required()
     user = st.session_state["user"]
 
-    st.header("🛠 CAPA")
+    st.markdown(
+        """
+        <div class="header-box">
+            <h2>🛠 CAPA</h2>
+            <p>일탈·변경 등의 원인을 기반으로 시정·예방조치를 계획하고 추적합니다.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     tab_list, tab_new, tab_status = st.tabs(["목록", "CAPA 생성", "상태 변경"])
 
@@ -410,7 +537,9 @@ def page_capa():
         require_permission("capa", "view")
         rows = q("SELECT * FROM capas ORDER BY id DESC", all=True)
         if rows:
+            st.markdown("<div class='card'>", unsafe_allow_html=True)
             st.dataframe(pd.DataFrame(rows), use_container_width=True)
+            st.markdown("</div>", unsafe_allow_html=True)
         else:
             st.info("등록된 CAPA가 없습니다.")
 
@@ -419,6 +548,7 @@ def page_capa():
         require_permission("capa", "create")
 
         capa_id = generate_capa_id()
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.text(f"자동 생성 CAPA ID: {capa_id}")
 
         from_type = st.selectbox("연계 타입", ["DEVIATION", "CHANGE"])
@@ -455,11 +585,13 @@ def page_capa():
 
             st.success(f"CAPA 등록 완료! (ID = {capa_id})")
             st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
 
     # ---------- STATUS CHANGE ----------
     with tab_status:
         require_permission("capa", "edit")
 
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
         capa_id_input = st.text_input("CAPA ID 입력 (예: CAPA-YYYYMMDD-HHMMSS)")
 
         if st.button("CAPA 불러오기"):
@@ -503,6 +635,7 @@ def page_capa():
 
                 st.success("CAPA 진행 상태가 변경되었습니다.")
                 st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ====================================================
@@ -512,7 +645,15 @@ def page_risk():
     login_required()
     user = st.session_state["user"]
 
-    st.header("📊 Risk Assessment (RPN)")
+    st.markdown(
+        """
+        <div class="header-box">
+            <h2>📊 Risk Assessment (RPN)</h2>
+            <p>변경·일탈·CAPA 건에 대한 Risk Priority Number(RPN)를 산정하고 상태를 관리합니다.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     tab_list, tab_new, tab_status = st.tabs(["목록", "Risk 평가 생성", "상태 변경"])
 
@@ -521,7 +662,9 @@ def page_risk():
         require_permission("risk", "view")
         rows = q("SELECT * FROM risk_assessment ORDER BY created_at DESC", all=True)
         if rows:
+            st.markdown("<div class='card'>", unsafe_allow_html=True)
             st.dataframe(pd.DataFrame(rows), use_container_width=True)
+            st.markdown("</div>", unsafe_allow_html=True)
         else:
             st.info("등록된 Risk 평가가 없습니다.")
 
@@ -529,11 +672,11 @@ def page_risk():
     with tab_new:
         require_permission("risk", "create")
 
-        # risk_id 자동 생성 + 표시
         if "new_risk_id" not in st.session_state:
             st.session_state["new_risk_id"] = generate_risk_id()
         risk_id = st.session_state["new_risk_id"]
 
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.text(f"자동 생성 Risk ID: {risk_id}")
 
         object_type = st.selectbox("Object Type", ["CHANGE", "DEVIATION", "CAPA"])
@@ -568,11 +711,13 @@ def page_risk():
 
             st.success(f"저장 완료! (Risk ID = {risk_id}, RPN = {risk_score})")
             st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
 
     # ---------- STATUS CHANGE ----------
     with tab_status:
         require_permission("risk", "edit")
 
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
         rid_input = st.text_input("Risk ID 입력 (예: RISK-XXXXXXXX)")
 
         if st.button("Risk 평가 불러오기"):
@@ -616,6 +761,7 @@ def page_risk():
 
                 st.success("Risk 상태가 변경되었습니다.")
                 st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ====================================================
@@ -627,18 +773,29 @@ def page_users():
 
     admin = st.session_state["user"]
 
-    st.header("👤 사용자 관리 (Admin)")
+    st.markdown(
+        """
+        <div class="header-box">
+            <h2>👤 사용자 관리 (Admin)</h2>
+            <p>계정 생성, 권한(Role) 부여 등을 관리하는 영역입니다.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     tab_list, tab_new = st.tabs(["사용자 목록", "새 사용자 생성"])
 
     with tab_list:
         rows = q("SELECT id, username, role, email, created_at FROM users ORDER BY id", all=True)
         if rows:
+            st.markdown("<div class='card'>", unsafe_allow_html=True)
             st.dataframe(pd.DataFrame(rows), use_container_width=True)
+            st.markdown("</div>", unsafe_allow_html=True)
         else:
             st.info("등록된 사용자가 없습니다.")
 
     with tab_new:
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
         username = st.text_input("Username")
         email = st.text_input("Email")
         pw = st.text_input("초기 Password", type="password")
@@ -665,6 +822,7 @@ def page_users():
 
                 st.success("사용자 생성 완료!")
                 st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ====================================================
@@ -674,7 +832,15 @@ def page_audit():
     login_required()
     require_permission("audit_logs", "view")
 
-    st.header("🧾 Audit Trail")
+    st.markdown(
+        """
+        <div class="header-box">
+            <h2>🧾 Audit Trail</h2>
+            <p>모든 주요 변경 및 상태 변경 이력을 감사 용도로 조회합니다.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     rows = q(
         "SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 300",
@@ -682,7 +848,9 @@ def page_audit():
     )
 
     if rows:
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.dataframe(pd.DataFrame(rows), use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
     else:
         st.info("표시할 Audit 로그가 없습니다.")
 
@@ -692,7 +860,16 @@ def page_audit():
 # ====================================================
 def page_dashboard():
     login_required()
-    st.header("📊 Dashboard Summary")
+
+    st.markdown(
+        """
+        <div class="header-box">
+            <h2>📊 Dashboard Summary</h2>
+            <p>Change / Deviation / CAPA 현황을 한 눈에 확인하는 요약 화면입니다.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     cc = q(
         "SELECT status, COUNT(*) AS cnt FROM change_controls GROUP BY status",
@@ -710,25 +887,31 @@ def page_dashboard():
     col1, col2, col3 = st.columns(3)
 
     with col1:
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.subheader("Change Status")
         if cc:
             st.dataframe(pd.DataFrame(cc), use_container_width=True)
         else:
             st.write("데이터 없음")
+        st.markdown("</div>", unsafe_allow_html=True)
 
     with col2:
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.subheader("Deviation Status")
         if dv:
             st.dataframe(pd.DataFrame(dv), use_container_width=True)
         else:
             st.write("데이터 없음")
+        st.markdown("</div>", unsafe_allow_html=True)
 
     with col3:
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.subheader("CAPA Progress")
         if cp:
             st.dataframe(pd.DataFrame(cp), use_container_width=True)
         else:
             st.write("데이터 없음")
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ====================================================
@@ -736,6 +919,19 @@ def page_dashboard():
 # ====================================================
 def main():
     st.set_page_config(page_title="GMP QMS", layout="wide")
+    apply_custom_css()
+
+    # 상단 공통 헤더
+    st.markdown(
+        """
+        <div class="app-header">
+            <img src="https://i.imgur.com/5cLQO5B.png" width="150">
+            <h1>GMP Quality Management System</h1>
+            <p>Change · Deviation · CAPA · Risk · Audit를 한 곳에서 관리하는 내부 QMS</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     if "user" not in st.session_state:
         login_screen()
