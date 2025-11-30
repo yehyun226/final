@@ -6,18 +6,11 @@ import streamlit as st
 import pymysql
 import pandas as pd
 import bcrypt
-import uuid  # ID 자동 생성용
+import uuid
 from st_aggrid import AgGrid, GridOptionsBuilder
 
-
 # ====================================================
-# A. GLOBAL UI THEME (CSS)
-# ====================================================
-
-
-
-# ====================================================
-# 0. DB CONNECTION
+# DB CONNECTION
 # ====================================================
 def db_conn():
     return pymysql.connect(
@@ -51,7 +44,7 @@ def q(sql, params=None, one=False, all=False, commit=False):
 
 
 # ====================================================
-# 1. ROLE PERMISSIONS
+# ROLE PERMISSIONS
 # ====================================================
 ROLE_PERMISSIONS = {
     "OPERATOR": {
@@ -94,7 +87,7 @@ ROLE_PERMISSIONS = {
 
 
 # ====================================================
-# 2. AUTH / LOGIN
+# AUTH / LOGIN
 # ====================================================
 def hash_pw(pw: str) -> str:
     return bcrypt.hashpw(pw.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
@@ -159,7 +152,7 @@ def login_screen():
 
 
 # ====================================================
-# 3. AUDIT LOG
+# AUDIT LOG
 # ====================================================
 def log_action(user_id, action_type, obj_type, obj_id,
                field_name=None, old_value=None, new_value=None):
@@ -173,7 +166,7 @@ def log_action(user_id, action_type, obj_type, obj_id,
 
 
 # ====================================================
-# 4. ID GENERATORS
+# ID GENERATORS
 # ====================================================
 def generate_change_id():
     return "CHG-" + datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -192,8 +185,7 @@ def generate_risk_id():
 
 
 # ====================================================
-# 5. CHANGE CONTROL
-# (기존 유지, 변화 없음)
+# 5. CHANGE CONTROL (삭제 기능 통합)
 # ====================================================
 def page_change_control():
     login_required()
@@ -214,17 +206,37 @@ def page_change_control():
     # ---------- LIST ----------
     with tab_list:
         require_permission("change_control", "view")
+
         rows = q("SELECT * FROM change_controls ORDER BY created_at DESC", all=True)
+
         if rows:
             st.markdown("<div class='card'>", unsafe_allow_html=True)
             df = pd.DataFrame(rows)
-            st.data_editor(df, use_container_width=True, height=400)
+
+            for _, row in df.iterrows():
+                col1, col2 = st.columns([8, 1])
+
+                with col1:
+                    st.text(f"{row['change_id']} — {row['title']} ({row['type']})")
+
+                with col2:
+                    if st.button("🗑", key=f"chg_{row['id']}"):
+                        require_permission("change_control", "delete")
+
+                        q("DELETE FROM change_controls WHERE id=%s", (row["id"],), commit=True)
+
+                        log_action(
+                            user["id"], "DELETE", "CHANGE",
+                            row["change_id"],
+                            old_value=row["title"]
+                        )
+
+                        st.success("삭제 완료!")
+                        st.rerun()
+
+            st.markdown("</div>", unsafe_allow_html=True)
         else:
             st.info("등록된 Change Control이 없습니다.")
-    
-    
-            
-
 
     # ---------- NEW ----------
     with tab_new:
@@ -232,6 +244,7 @@ def page_change_control():
 
         if "new_change_id" not in st.session_state:
             st.session_state["new_change_id"] = generate_change_id()
+
         change_id = st.session_state["new_change_id"]
 
         st.markdown("<div class='card'>", unsafe_allow_html=True)
@@ -263,7 +276,6 @@ def page_change_control():
                 log_action(user["id"], "CREATE", "CHANGE", change_id, new_value=title)
 
                 st.session_state.pop("new_change_id", None)
-
                 st.success(f"등록 완료! (ID = {change_id})")
                 st.rerun()
 
@@ -289,7 +301,7 @@ def page_change_control():
 
             status_options = ["Draft", "Review", "QA Review", "Approved", "Implemented", "Closed"]
             cur = row.get("status") or "Draft"
-            idx = status_options.index(cur) if cur in status_options else 0
+            idx = status_options.index(cur)
 
             new_status = st.selectbox("새 상태", status_options, index=idx)
 
@@ -313,7 +325,7 @@ def page_change_control():
 
 
 # ====================================================
-# 6. DEVIATION (Batch ID 삭제 + Title 추가)
+# 6. DEVIATION (삭제 기능 포함)
 # ====================================================
 def page_deviation():
     login_required()
@@ -334,10 +346,34 @@ def page_deviation():
     # ---------- LIST ----------
     with tab_list:
         require_permission("deviations", "view")
+
         rows = q("SELECT * FROM deviations ORDER BY detected_time DESC", all=True)
+
         if rows:
             st.markdown("<div class='card'>", unsafe_allow_html=True)
-            st.dataframe(pd.DataFrame(rows), use_container_width=True)
+            df = pd.DataFrame(rows)
+
+            for _, row in df.iterrows():
+                col1, col2 = st.columns([8, 1])
+
+                with col1:
+                    st.text(f"{row['deviation_id']} — {row['title']}")
+
+                with col2:
+                    if st.button("🗑", key=f"dev_{row['id']}"):
+                        require_permission("deviations", "delete")
+
+                        q("DELETE FROM deviations WHERE id=%s", (row["id"],), commit=True)
+
+                        log_action(
+                            user["id"], "DELETE", "DEVIATION",
+                            row["deviation_id"],
+                            old_value=row["title"]
+                        )
+
+                        st.success("삭제 완료!")
+                        st.rerun()
+
             st.markdown("</div>", unsafe_allow_html=True)
         else:
             st.info("등록된 Deviation이 없습니다.")
@@ -368,7 +404,6 @@ def page_deviation():
                  risk_eval, status, created_by)
                 VALUES (%s,%s,%s,NOW(),%s,%s,%s,%s,'Open',%s)
                 """
-
                 params = (
                     deviation_id, title, description,
                     immediate_action, preventive_action,
@@ -407,8 +442,8 @@ def page_deviation():
             st.write("선택된 Deviation:", row)
 
             status_options = ["Open", "Investigation", "QA Review", "Approved", "Closed"]
-            cur = row.get("status") or "Open"
-            idx = status_options.index(cur) if cur in status_options else 0
+            cur = row.get("status")
+            idx = status_options.index(cur)
 
             new_status = st.selectbox("새 상태", status_options, index=idx)
 
@@ -440,7 +475,7 @@ def page_deviation():
 
 
 # ====================================================
-# 7. CAPA (연계 ID 삭제 + Title 추가)
+# 7. CAPA (삭제 기능 포함)
 # ====================================================
 def page_capa():
     login_required()
@@ -461,10 +496,34 @@ def page_capa():
     # ---------- LIST ----------
     with tab_list:
         require_permission("capa", "view")
+
         rows = q("SELECT * FROM capas ORDER BY id DESC", all=True)
+
         if rows:
             st.markdown("<div class='card'>", unsafe_allow_html=True)
-            st.dataframe(pd.DataFrame(rows), use_container_width=True)
+            df = pd.DataFrame(rows)
+
+            for _, row in df.iterrows():
+                col1, col2 = st.columns([8, 1])
+
+                with col1:
+                    st.text(f"{row['capa_id']} — {row['title']}")
+
+                with col2:
+                    if st.button("🗑", key=f"capa_{row['id']}"):
+                        require_permission("capa", "delete")
+
+                        q("DELETE FROM capas WHERE id=%s", (row["id"],), commit=True)
+
+                        log_action(
+                            user["id"], "DELETE", "CAPA",
+                            row["capa_id"],
+                            old_value=row["title"]
+                        )
+
+                        st.success("삭제 완료!")
+                        st.rerun()
+
             st.markdown("</div>", unsafe_allow_html=True)
         else:
             st.info("등록된 CAPA가 없습니다.")
@@ -538,8 +597,8 @@ def page_capa():
             st.write("선택된 CAPA:", row)
 
             progress_options = ["Not Started", "In Progress", "Completed", "Closed"]
-            cur = row.get("progress") or "Not Started"
-            idx = progress_options.index(cur) if cur in progress_options else 0
+            cur = row.get("progress")
+            idx = progress_options.index(cur)
 
             new_progress = st.selectbox("새 진행 상태", progress_options, index=idx)
 
@@ -571,7 +630,7 @@ def page_capa():
 
 
 # ====================================================
-# 8. RISK ASSESSMENT (Object ID 삭제 + Title 추가)
+# 8. RISK ASSESSMENT (삭제 기능 포함)
 # ====================================================
 def page_risk():
     login_required()
@@ -592,10 +651,34 @@ def page_risk():
     # ---------- LIST ----------
     with tab_list:
         require_permission("risk", "view")
+
         rows = q("SELECT * FROM risk_assessment ORDER BY created_at DESC", all=True)
+
         if rows:
             st.markdown("<div class='card'>", unsafe_allow_html=True)
-            st.dataframe(pd.DataFrame(rows), use_container_width=True)
+            df = pd.DataFrame(rows)
+
+            for _, row in df.iterrows():
+                col1, col2 = st.columns([8, 1])
+
+                with col1:
+                    st.text(f"{row['risk_id']} — {row['title']} (RPN={row['risk_score']})")
+
+                with col2:
+                    if st.button("🗑", key=f"risk_{row['id']}"):
+                        require_permission("risk", "delete")
+
+                        q("DELETE FROM risk_assessment WHERE id=%s", (row["id"],), commit=True)
+
+                        log_action(
+                            user["id"], "DELETE", "RISK",
+                            row["risk_id"],
+                            old_value=row["title"]
+                        )
+
+                        st.success("삭제 완료!")
+                        st.rerun()
+
             st.markdown("</div>", unsafe_allow_html=True)
         else:
             st.info("등록된 Risk 평가가 없습니다.")
@@ -635,8 +718,8 @@ def page_risk():
             )
 
             log_action(
-                user["id"], "CREATE", "RISK", risk_id,
-                new_value=f"{risk_title} (RPN={risk_score})"
+                user["id"], "CREATE", "RISK",
+                risk_id, new_value=risk_title
             )
 
             st.session_state.pop("new_risk_id", None)
@@ -666,8 +749,8 @@ def page_risk():
             st.write("선택된 Risk 평가:", row)
 
             status_options = ["Draft", "Reviewed", "Approved", "Closed"]
-            cur = row.get("status") or "Draft"
-            idx = status_options.index(cur) if cur in status_options else 0
+            cur = row.get("status")
+            idx = status_options.index(cur)
 
             new_status = st.selectbox("새 상태", status_options, index=idx)
 
@@ -693,7 +776,7 @@ def page_risk():
 
 
 # ====================================================
-# 9. USER MANAGEMENT (Admin)
+# 9. USER MANAGEMENT (이전과 동일)
 # ====================================================
 def page_users():
     login_required()
@@ -782,7 +865,7 @@ def page_audit():
 
 
 # ====================================================
-# 11. DASHBOARD (그대로 유지)
+# 11. DASHBOARD
 # ====================================================
 def page_dashboard():
     login_required()
