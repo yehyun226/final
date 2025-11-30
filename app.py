@@ -1,25 +1,34 @@
 # -*- coding: utf-8 -*-
+import os
+from datetime import datetime
+
 import streamlit as st
 import pandas as pd
 import pymysql
-from datetime import datetime
+import bcrypt
 
 # ==========================================
-# DB CONNECT
+# 0. DB CONNECT (환경변수 기반 - 원래 버전 스타일)
 # ==========================================
 def get_connection():
+    """
+    Railway / 서버 환경에 설정된 환경변수 사용:
+    MYSQL_HOST / MYSQL_PORT / MYSQL_USER / MYSQL_PASSWORD / MYSQL_DB
+    """
     return pymysql.connect(
-        host=st.secrets["MYSQL_HOST"],
-        user=st.secrets["MYSQL_USER"],
-        password=st.secrets["MYSQL_PASSWORD"],
-        database=st.secrets["MYSQL_DATABASE"],
-        port=int(st.secrets["MYSQL_PORT"]),
-        cursorclass=pymysql.cursors.DictCursor
+        host=os.environ["MYSQL_HOST"],
+        user=os.environ["MYSQL_USER"],
+        password=os.environ["MYSQL_PASSWORD"],
+        database=os.environ["MYSQL_DB"],   # 원래 버전과 동일
+        port=int(os.environ["MYSQL_PORT"]),
+        cursorclass=pymysql.cursors.DictCursor,
+        charset="utf8mb4",
+        autocommit=True,
     )
 
 
 # ==========================================
-# DB EXECUTE FUNCTION
+# 1. DB EXECUTE FUNCTION
 # ==========================================
 def execute_query(sql, params=None, fetchone=False, fetchall=False, commit=False):
     conn = get_connection()
@@ -41,16 +50,18 @@ def execute_query(sql, params=None, fetchone=False, fetchall=False, commit=False
 
 
 # ==========================================
-# PASSWORD CHECK
+# 2. PASSWORD UTILS
 # ==========================================
-import bcrypt
-
 def check_password(raw, hashed):
     return bcrypt.checkpw(raw.encode("utf-8"), hashed.encode("utf-8"))
 
 
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
 # ==========================================
-# LOGIN & AUTH
+# 3. LOGIN & AUTH
 # ==========================================
 def login_screen():
     st.title("🔐 QMS 로그인")
@@ -67,24 +78,37 @@ def login_screen():
             return
 
         if check_password(password, user["password_hash"]):
-            st.session_state["user"] = user
+            # 세션에 필요한 정보만 저장
+            st.session_state["user"] = {
+                "id": user["id"],
+                "username": user["username"],
+                "role": user["role"],
+            }
             st.success("로그인 성공!")
             st.experimental_rerun()
         else:
             st.error("비밀번호가 올바르지 않습니다.")
 
 
+def require_login():
+    if "user" not in st.session_state:
+        st.warning("로그인이 필요합니다.")
+        st.stop()
+
+
 def require_role(roles):
-    user = st.session_state.get("user")
-    if not user or user["role"] not in roles:
+    require_login()
+    user = st.session_state["user"]
+    if user["role"] not in roles:
         st.error("접근 권한이 없습니다.")
         st.stop()
 
 
 # ==========================================
-# DASHBOARD
+# 4. DASHBOARD
 # ==========================================
 def page_dashboard():
+    require_login()
     st.header("📊 Dashboard")
 
     cc = execute_query("SELECT COUNT(*) AS cnt FROM change_controls", fetchone=True)["cnt"]
@@ -102,9 +126,12 @@ def page_dashboard():
 
 
 # ==========================================
-# CHANGE CONTROL
+# 5. CHANGE CONTROL
 # ==========================================
 def page_change_control():
+    require_login()
+    user = st.session_state["user"]
+
     st.header("📝 변경관리 (Change Control)")
 
     tab1, tab2 = st.tabs(["등록된 변경관리", "새 변경관리 생성"])
@@ -112,28 +139,37 @@ def page_change_control():
     # LIST
     with tab1:
         rows = execute_query("SELECT * FROM change_controls ORDER BY id DESC", fetchall=True)
-        st.dataframe(pd.DataFrame(rows), use_container_width=True)
+        if rows:
+            st.dataframe(pd.DataFrame(rows), use_container_width=True)
+        else:
+            st.info("등록된 변경관리가 없습니다.")
 
     # CREATE
     with tab2:
         title = st.text_input("Title")
         description = st.text_area("Description")
-        requester = st.text_input("Requester")
+        requester = st.text_input("Requester", value=user["username"])
 
         if st.button("생성"):
-            sql = """
-                INSERT INTO change_controls (title, description, requester, status)
-                VALUES (%s, %s, %s, 'Draft')
-            """
-            execute_query(sql, (title, description, requester), commit=True)
-            st.success("등록되었습니다.")
-            st.experimental_rerun()
+            if not title or not description:
+                st.warning("Title과 Description은 필수입니다.")
+            else:
+                sql = """
+                    INSERT INTO change_controls (title, description, requester, status, created_at)
+                    VALUES (%s, %s, %s, 'Draft', NOW())
+                """
+                execute_query(sql, (title, description, requester), commit=True)
+                st.success("등록되었습니다.")
+                st.experimental_rerun()
 
 
 # ==========================================
-# DEVIATIONS
+# 6. DEVIATIONS
 # ==========================================
 def page_deviations():
+    require_login()
+    user = st.session_state["user"]
+
     st.header("⚠️ 일탈관리 (Deviation)")
 
     tab1, tab2 = st.tabs(["등록된 일탈", "새 일탈 생성"])
@@ -141,7 +177,10 @@ def page_deviations():
     # LIST
     with tab1:
         rows = execute_query("SELECT * FROM deviations ORDER BY id DESC", fetchall=True)
-        st.dataframe(pd.DataFrame(rows), use_container_width=True)
+        if rows:
+            st.dataframe(pd.DataFrame(rows), use_container_width=True)
+        else:
+            st.info("등록된 일탈이 없습니다.")
 
     # CREATE
     with tab2:
@@ -152,19 +191,32 @@ def page_deviations():
         root_cause = st.text_area("Root Cause")
 
         if st.button("일탈 등록"):
-            sql = """
-                INSERT INTO deviations (deviation_id, batch_id, description, immediate_action, root_cause, status)
-                VALUES (%s, %s, %s, %s, %s, 'Open')
-            """
-            execute_query(sql, (deviation_id, batch,args(batch_id, description, immediate_action, root_cause)), commit=True)
-            st.success("일탈이 생성되었습니다.")
-            st.experimental_rerun()
+            if not deviation_id or not description:
+                st.warning("Deviation ID와 Description은 필수입니다.")
+            else:
+                sql = """
+                    INSERT INTO deviations
+                    (deviation_id, batch_id, description, immediate_action, root_cause, status, created_by, detected_time)
+                    VALUES (%s, %s, %s, %s, %s, 'Open', %s, NOW())
+                """
+                # 🔥 여기 원래 코드에 있던 오타 수정:
+                # execute_query(... (deviation_id, batch,args(...)) → 정상 파라미터로 수정
+                execute_query(
+                    sql,
+                    (deviation_id, batch_id, description, immediate_action, root_cause, user["id"]),
+                    commit=True,
+                )
+                st.success("일탈이 생성되었습니다.")
+                st.experimental_rerun()
 
 
 # ==========================================
-# CAPA
+# 7. CAPA
 # ==========================================
 def page_capa():
+    require_login()
+    user = st.session_state["user"]
+
     st.header("🛠 CAPA")
 
     tab1, tab2 = st.tabs(["CAPA 목록", "새 CAPA 생성"])
@@ -172,7 +224,10 @@ def page_capa():
     # LIST
     with tab1:
         rows = execute_query("SELECT * FROM capas ORDER BY id DESC", fetchall=True)
-        st.dataframe(pd.DataFrame(rows), use_container_width=True)
+        if rows:
+            st.dataframe(pd.DataFrame(rows), use_container_width=True)
+        else:
+            st.info("등록된 CAPA가 없습니다.")
 
     # CREATE
     with tab2:
@@ -182,26 +237,40 @@ def page_capa():
         preventive_action = st.text_area("Preventive Action")
 
         if st.button("CAPA 생성"):
-            sql = """
-                INSERT INTO capas (capa_id, action_plan, corrective_action, preventive_action, progress)
-                VALUES (%s, %s, %s, %s, 'Not Started')
-            """
-            execute_query(sql, (capa_id, action_plan, corrective_action, preventive_action), commit=True)
-            st.success("CAPA 생성 완료")
-            st.experimental_rerun()
+            if not capa_id or not action_plan:
+                st.warning("CAPA ID와 Action Plan은 필수입니다.")
+            else:
+                sql = """
+                    INSERT INTO capas
+                    (capa_id, action_plan, corrective_action, preventive_action, progress, created_by, created_at)
+                    VALUES (%s, %s, %s, %s, 'Not Started', %s, NOW())
+                """
+                execute_query(
+                    sql,
+                    (capa_id, action_plan, corrective_action, preventive_action, user["id"]),
+                    commit=True,
+                )
+                st.success("CAPA 생성 완료")
+                st.experimental_rerun()
 
 
 # ==========================================
-# RISK ASSESSMENT
+# 8. RISK ASSESSMENT
 # ==========================================
 def page_risk_assessment():
+    require_login()
+    user = st.session_state["user"]
+
     st.header("📌 품질위험관리 (Risk Assessment)")
 
     tab1, tab2 = st.tabs(["위험 평가 목록", "새 위험평가 생성"])
 
     with tab1:
         rows = execute_query("SELECT * FROM risk_assessment ORDER BY id DESC", fetchall=True)
-        st.dataframe(pd.DataFrame(rows), use_container_width=True)
+        if rows:
+            st.dataframe(pd.DataFrame(rows), use_container_width=True)
+        else:
+            st.info("등록된 위험평가가 없습니다.")
 
     with tab2:
         title = st.text_input("Title")
@@ -210,28 +279,41 @@ def page_risk_assessment():
         risk_level = st.selectbox("Risk Level", ["Low", "Medium", "High"])
 
         if st.button("위험평가 생성"):
-            sql = """
-                INSERT INTO risk_assessment (title, description, impact, risk_level)
-                VALUES (%s, %s, %s, %s)
-            """
-            execute_query(sql, (title, description, impact, risk_level), commit=True)
-            st.success("위험평가가 등록되었습니다.")
-            st.experimental_rerun()
+            if not title or not description:
+                st.warning("Title과 Description은 필수입니다.")
+            else:
+                sql = """
+                    INSERT INTO risk_assessment
+                    (title, description, impact, risk_level, created_by, created_at)
+                    VALUES (%s, %s, %s, %s, %s, NOW())
+                """
+                execute_query(
+                    sql,
+                    (title, description, impact, risk_level, user["id"]),
+                    commit=True,
+                )
+                st.success("위험평가가 등록되었습니다.")
+                st.experimental_rerun()
 
 
 # ==========================================
-# USER MANAGEMENT (ADMIN ONLY)
+# 9. USER MANAGEMENT (ADMIN ONLY)
 # ==========================================
 def page_users():
     require_role(["ADMIN"])
+    admin = st.session_state["user"]
+
     st.header("👤 사용자 관리 (ADMIN 전용)")
 
     tabs = st.tabs(["사용자 목록", "새 사용자 생성"])
 
     # LIST
     with tabs[0]:
-        rows = execute_query("SELECT id, username, role, created_at FROM users", fetchall=True)
-        st.dataframe(pd.DataFrame(rows))
+        rows = execute_query("SELECT id, username, role, created_at FROM users ORDER BY id", fetchall=True)
+        if rows:
+            st.dataframe(pd.DataFrame(rows), use_container_width=True)
+        else:
+            st.info("등록된 사용자가 없습니다.")
 
     # CREATE
     with tabs[1]:
@@ -240,22 +322,34 @@ def page_users():
         role = st.selectbox("Role", ["OPERATOR", "QA", "QC", "ADMIN"])
 
         if st.button("사용자 생성"):
-            hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-            sql = "INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s)"
-            execute_query(sql, (username, hashed, role), commit=True)
-            st.success("사용자 생성 완료")
-            st.experimental_rerun()
+            if not username or not password:
+                st.warning("Username / Password는 필수입니다.")
+            else:
+                hashed = hash_password(password)
+                sql = "INSERT INTO users (username, password_hash, role, created_at) VALUES (%s, %s, %s, NOW())"
+                execute_query(sql, (username, hashed, role), commit=True)
+                st.success("사용자 생성 완료")
+                st.experimental_rerun()
 
 
 # ==========================================
-# MAIN
+# 10. MAIN
 # ==========================================
 def main():
+    st.set_page_config(page_title="GMP QMS", layout="wide")
+
+    # 로그인 안 되어 있으면 로그인 화면
     if "user" not in st.session_state:
         login_screen()
         return
 
+    user = st.session_state["user"]
+
     st.sidebar.title("QMS 메뉴")
+    st.sidebar.write(f"👤 {user['username']} ({user['role']})")
+    if st.sidebar.button("로그아웃"):
+        st.session_state.pop("user")
+        st.experimental_rerun()
 
     menu = st.sidebar.radio("Menu", [
         "Dashboard",
