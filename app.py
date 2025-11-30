@@ -14,6 +14,8 @@ from st_aggrid import AgGrid, GridOptionsBuilder
 # A. GLOBAL UI THEME (CSS)
 # ====================================================
 
+
+
 # ====================================================
 # 0. DB CONNECTION
 # ====================================================
@@ -834,6 +836,17 @@ def page_dashboard():
 # ====================================================
 def main():
     st.set_page_config(page_title="GMP QMS", layout="wide")
+
+    st.markdown(
+        """
+        <div class="app-header">
+            <img src="https://raw.githubusercontent.com/yehyun226/final/main/image.png" width="1200">
+            <h1>GMP Quality Management System</h1>
+            <p>Change · Deviation · CAPA · Risk · Audit – All in One Quality System</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     if "user" not in st.session_state:
         login_screen()
