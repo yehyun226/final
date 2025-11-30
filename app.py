@@ -26,6 +26,12 @@ def apply_custom_css():
         div.block-container {
             padding-top: 0rem !important;
         }
+        
+        /* 로고 아래 빈 공간 제거 */
+        div[data-testid="stAppViewContainer"] div.block-container {
+            margin-top: 0 !important;
+        }
+
 
         .app-header img {
             display: block;
