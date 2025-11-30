@@ -1,2 +1,2 @@
 bcrypt
-mysql.connector
+pymysql
