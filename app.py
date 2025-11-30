@@ -3,7 +3,7 @@ import os
 from datetime import datetime, date
 
 import bcrypt
-import mysql.connector
+import pymysql
 import pandas as pd
 import streamlit as st
 
@@ -13,23 +13,18 @@ import streamlit as st
 #    MYSQL_HOST / MYSQL_PORT / MYSQL_USER / MYSQL_PASSWORD / MYSQL_DATABASE
 # ====================================================
 
+
 def get_db_conn():
-    """MySQL 연결 생성 (Railway 환경 변수 우선 사용)"""
-    host = os.getenv("MYSQL_HOST", "crossover.proxy.rlwy.net")
-    port = int(os.getenv("MYSQL_PORT", "30917"))
-    user = os.getenv("MYSQL_USER", "root")
-    password = os.getenv("MYSQL_PASSWORD", "YOUR_PASSWORD_HERE")
-    database = os.getenv("MYSQL_DATABASE", "railway")
-
-    return mysql.connector.connect(
-        host=host,
-        port=port,
-        user=user,
-        password=password,
-        database=database,
-        charset="utf8mb4"
+    return pymysql.connect(
+        host=os.environ["MYSQL_HOST"],
+        user=os.environ["MYSQL_USER"],
+        password=os.environ["MYSQL_PASSWORD"],
+        database=os.environ["MYSQL_DB"],
+        port=int(os.environ["MYSQL_PORT"]),
+        charset="utf8mb4",
+        cursorclass=pymysql.cursors.DictCursor,
+        autocommit=True
     )
-
 
 def execute_query(sql, params=None, fetchone=False, fetchall=False, commit=False):
     """공통 쿼리 실행 헬퍼"""
