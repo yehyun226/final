@@ -167,8 +167,7 @@ def log_action(user_id, action_type, obj_type, obj_id,
 # 4. ID GENERATORS
 # ====================================================
 def generate_change_id():
-    """CHG- + 8자리 UUID 조각"""
-    return "CHG-" + uuid.uuid4().hex[:8].upper()
+    return "CHG-" + datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
 def generate_capa_id():
@@ -180,8 +179,7 @@ def generate_deviation_id():
 
 
 def generate_risk_id():
-    """RISK- + 8자리 UUID 조각"""
-    return "RISK-" + uuid.uuid4().hex[:8].upper()
+    return "RISK-" + datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
 # ====================================================
