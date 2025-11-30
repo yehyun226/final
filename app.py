@@ -19,6 +19,17 @@ def apply_custom_css():
         <style>
         .stApp { background-color: #FFFFFF !important; }
 
+        .app-header img {
+            display: block;
+            margin: 0 auto;
+            padding: 0;
+            margin-bottom: -20px;
+        }
+
+        .block-container {
+            padding-top: 0rem !important;
+        }
+
         .app-header { text-align: center; padding: 16px 0 28px 0; }
         .app-header h1 { margin-top: 10px; font-size: 30px; font-weight: 700; }
         .app-header p { margin-top: 4px; color: #666; font-size: 14px; }
@@ -52,7 +63,7 @@ def apply_custom_css():
             border: none;
         }
         .stButton button:hover { background-color: #1B45C4; }
-        
+
         .stDataFrame { border-radius: 8px; }
         </style>
         """,
