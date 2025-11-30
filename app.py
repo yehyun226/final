@@ -6,6 +6,7 @@ import streamlit as st
 import pymysql
 import pandas as pd
 import bcrypt
+import uuid  # ← Change ID 생성을 위한 uuid
 
 
 # ====================================================
@@ -165,6 +166,11 @@ def log_action(user_id, action_type, obj_type, obj_id,
 # ====================================================
 # 4. CHANGE CONTROL
 # ====================================================
+def generate_change_id():
+    """CHG- + 8자리 UUID 조각으로 변경 ID 생성"""
+    return "CHG-" + uuid.uuid4().hex[:8].upper()
+
+
 def page_change_control():
     login_required()
     user = st.session_state["user"]
@@ -196,7 +202,7 @@ def page_change_control():
             if not title or not description:
                 st.warning("제목과 설명은 필수입니다.")
             else:
-                change_id = "CHG-" + datetime.now().strftime("%Y%m%d-%H%M%S")
+                change_id = generate_change_id()
 
                 sql = """
                 INSERT INTO change_controls
@@ -219,7 +225,7 @@ def page_change_control():
         # QA / ADMIN 정도만 사용하게 할 거면 'edit' 기준
         require_permission("change_control", "edit")
 
-        cid = st.text_input("Change ID 입력 (예: CHG-20251130-123000)")
+        cid = st.text_input("Change ID 입력 (예: CHG-XXXXXXXX)")
 
         if st.button("불러오기"):
             row = q("SELECT * FROM change_controls WHERE change_id=%s",
@@ -326,7 +332,7 @@ def page_deviation():
         # QA / ADMIN 위주이므로 edit 권한 기준
         require_permission("deviations", "edit")
 
-        dev_id_input = st.text_input("Deviation ID 입력 (예: DEV-20251130-123000)")
+        dev_id_input = st.text_input("Deviation ID 입력 (예: DEV-YYYYMMDD-HHMMSS)")
 
         if st.button("Deviation 불러오기"):
             row = q("SELECT * FROM deviations WHERE deviation_id=%s",
@@ -440,7 +446,7 @@ def page_capa():
     with tab_status:
         require_permission("capa", "edit")
 
-        capa_id_input = st.text_input("CAPA ID 입력 (예: CAPA-20251130-123000)")
+        capa_id_input = st.text_input("CAPA ID 입력 (예: CAPA-YYYYMMDD-HHMMSS)")
 
         if st.button("CAPA 불러오기"):
             row = q("SELECT * FROM capas WHERE capa_id=%s",
@@ -497,7 +503,7 @@ def page_risk():
 
     st.header("📊 Risk Assessment (RPN)")
 
-    tab_list, tab_new = st.tabs(["목록", "Risk 평가 생성"])
+    tab_list, tab_new, tab_status = st.tabs(["목록", "Risk 평가 생성", "상태 변경"])
 
     # ---------- LIST ----------
     with tab_list:
@@ -542,6 +548,57 @@ def page_risk():
 
             st.success(f"저장 완료! RPN = {risk_score}")
             st.rerun()
+
+    # ---------- STATUS CHANGE ----------
+    with tab_status:
+        require_permission("risk", "edit")
+
+        rid = st.number_input("Risk Assessment ID (PK id) 입력", min_value=1)
+
+        if st.button("Risk 평가 불러오기"):
+            row = q("SELECT * FROM risk_assessment WHERE id=%s", (rid,), one=True)
+            if not row:
+                st.error("해당 Risk Assessment가 없습니다.")
+            else:
+                st.session_state["selected_risk"] = row
+
+        row = st.session_state.get("selected_risk")
+        if row:
+            st.write("선택된 Risk 평가:", row)
+
+            status_options = ["Draft", "Reviewed", "Approved", "Closed"]
+            current_status = row.get("status") or "Draft"
+            if current_status in status_options:
+                idx = status_options.index(current_status)
+            else:
+                idx = 0
+
+            new_status = st.selectbox("새 상태", status_options, index=idx)
+
+            if st.button("Risk 상태 저장"):
+                old_status = current_status
+                q(
+                    """
+                    UPDATE risk_assessment
+                       SET status=%s
+                     WHERE id=%s
+                    """,
+                    (new_status, row["id"]),
+                    commit=True,
+                )
+
+                log_action(
+                    user["id"],
+                    "STATUS_CHANGE",
+                    "RISK",
+                    f"{row['object_type']}:{row['object_id']}",
+                    field_name="status",
+                    old_value=old_status,
+                    new_value=new_status,
+                )
+
+                st.success("Risk 상태가 변경되었습니다.")
+                st.rerun()
 
 
 # ====================================================
