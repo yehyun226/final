@@ -13,69 +13,6 @@ from st_aggrid import AgGrid, GridOptionsBuilder
 # ====================================================
 # A. GLOBAL UI THEME (CSS)
 # ====================================================
-def apply_custom_css():
-    st.markdown(
-        """
-        <style>
-        .stApp { background-color: #FFFFFF !important; }
-
-        /* 상단 여백 완전 제거 */
-        div[data-testid="stAppViewContainer"] > div:first-child {
-            padding-top: 0rem !important;
-        }
-        div.block-container {
-            padding-top: 0rem !important;
-        }
-        
-        /* 로고 아래 빈 공간 제거 */
-        div[data-testid="stAppViewContainer"] div.block-container {
-            margin-top: 0 !important;
-        }
-
-
-        .app-header img {
-            display: block;
-            margin: 0 auto;
-            padding: 0;
-            margin-bottom: -20px;
-        }
-
-        .app-header { text-align: center; padding: 16px 0 28px 0; }
-        .app-header h1 { margin-top: 10px; font-size: 30px; font-weight: 700; }
-        .app-header p { margin-top: 4px; color: #666; font-size: 14px; }
-
-        .card {
-            background: #FFFFFF;
-            padding: 20px;
-            border-radius: 12px;
-            border: 1px solid #E5E9F0;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-            margin-bottom: 24px;
-        }
-
-        .header-box {
-            padding: 12px 18px;
-            background:#FFFFFF;
-            border-radius:10px;
-            border:1px solid #E5E9F0;
-            margin-bottom:20px;
-        }
-
-        section[data-testid="stSidebar"] { background-color: #F5F7FA !important; }
-
-        .stButton button {
-            border-radius: 8px;
-            padding: 8px 18px;
-            background-color: #2D5BE3;
-            color: white;
-            border: none;
-        }
-        .stButton button:hover { background-color: #1B45C4; }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
 
 # ====================================================
 # 0. DB CONNECTION
@@ -897,18 +834,6 @@ def page_dashboard():
 # ====================================================
 def main():
     st.set_page_config(page_title="GMP QMS", layout="wide")
-    apply_custom_css()
-
-    st.markdown(
-        """
-        <div class="app-header">
-            <img src="https://raw.githubusercontent.com/yehyun226/final/main/image.png" width="1200">
-            <h1>GMP Quality Management System</h1>
-            <p>Change · Deviation · CAPA · Risk · Audit – All in One Quality System</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
 
     if "user" not in st.session_state:
         login_screen()
