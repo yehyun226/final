@@ -764,7 +764,7 @@ def page_audit():
         unsafe_allow_html=True,
     )
 
-    rows = q("SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 300", all=True)
+    rows = q("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 300", all=True)
 
     if rows:
         st.markdown("<div class='card'>", unsafe_allow_html=True)
