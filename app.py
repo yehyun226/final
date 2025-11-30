@@ -890,7 +890,7 @@ def main():
     st.markdown(
         """
         <div class="app-header">
-            <img src="https://raw.githubusercontent.com/yehyun226/final/main/image.png" width="320">
+            <img src="https://raw.githubusercontent.com/yehyun226/final/main/image.png" width="600">
             <h1>GMP Quality Management System</h1>
             <p>Change · Deviation · CAPA · Risk · Audit – All in One Quality System</p>
         </div>
