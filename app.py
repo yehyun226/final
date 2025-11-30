@@ -19,15 +19,19 @@ def apply_custom_css():
         <style>
         .stApp { background-color: #FFFFFF !important; }
 
+        /* 상단 여백 완전 제거 */
+        div[data-testid="stAppViewContainer"] > div:first-child {
+            padding-top: 0rem !important;
+        }
+        div.block-container {
+            padding-top: 0rem !important;
+        }
+
         .app-header img {
             display: block;
             margin: 0 auto;
             padding: 0;
             margin-bottom: -20px;
-        }
-
-        .block-container {
-            padding-top: 0rem !important;
         }
 
         .app-header { text-align: center; padding: 16px 0 28px 0; }
@@ -50,8 +54,6 @@ def apply_custom_css():
             border:1px solid #E5E9F0;
             margin-bottom:20px;
         }
-        .header-box h2 { margin:0; font-size: 24px; }
-        .header-box p { color:#555; margin-top:6px; font-size: 14px; }
 
         section[data-testid="stSidebar"] { background-color: #F5F7FA !important; }
 
@@ -63,8 +65,6 @@ def apply_custom_css():
             border: none;
         }
         .stButton button:hover { background-color: #1B45C4; }
-
-        .stDataFrame { border-radius: 8px; }
         </style>
         """,
         unsafe_allow_html=True,
