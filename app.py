@@ -7,6 +7,7 @@ import pymysql
 import pandas as pd
 import bcrypt
 import uuid  # ID 자동 생성용
+from st_aggrid import AgGrid, GridOptionsBuilder
 
 
 # ====================================================
@@ -269,6 +270,8 @@ def page_change_control():
             st.data_editor(df, use_container_width=True, height=400)
         else:
             st.info("등록된 Change Control이 없습니다.")
+    
+    
             
 
 
@@ -887,9 +890,9 @@ def main():
     st.markdown(
         """
         <div class="app-header">
-            <img src="https://i.imgur.com/5cLQO5B.png" width="150">
+            <img src="https://raw.githubusercontent.com/yehyun226/final/main/image.png" width="150">
             <h1>GMP Quality Management System</h1>
-            <p>Change · Deviation · CAPA · Risk · Audit를 한 곳에서 관리하는 내부 QMS</p>
+            <p>Change · Deviation · CAPA · Risk · Audit – All in One Quality System</p>
         </div>
         """,
         unsafe_allow_html=True,
