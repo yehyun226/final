@@ -6,8 +6,7 @@ import streamlit as st
 import pymysql
 import pandas as pd
 import bcrypt
-import uuid  # ID 자동 생성용
-from st_aggrid import AgGrid, GridOptionsBuilder
+from st_aggrid import AgGrid, GridOptionsBuilder  # 안 써도 일단 그대로 둠
 
 # ====================================================
 # 0. DB CONNECTION
@@ -186,7 +185,6 @@ def generate_risk_id():
 
 # ====================================================
 # 5. CHANGE CONTROL
-# (기존 유지, 변화 없음)
 # ====================================================
 def page_change_control():
     login_required()
@@ -207,17 +205,14 @@ def page_change_control():
     # ---------- LIST ----------
     with tab_list:
         require_permission("change_control", "view")
-        rows = q("SELECT * FROM change_controls ORDER BY created_at DESC", all=True)
+        rows = q("SELECT * FROM change_controls ORDER BY created_time DESC", all=True)
         if rows:
             st.markdown("<div class='card'>", unsafe_allow_html=True)
             df = pd.DataFrame(rows)
-            st.data_editor(df, use_container_width=True, height=400)
+            st.dataframe(df, use_container_width=True)
+            st.markdown("</div>", unsafe_allow_html=True)
         else:
             st.info("등록된 Change Control이 없습니다.")
-    
-    
-            
-
 
     # ---------- NEW ----------
     with tab_new:
@@ -243,7 +238,7 @@ def page_change_control():
                 sql = """
                 INSERT INTO change_controls
                 (change_id, title, type, description, impact, risk_level,
-                 created_by, status)
+                 created_id, status)
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
                 """
                 params = (
@@ -288,7 +283,7 @@ def page_change_control():
 
             if st.button("상태 업데이트"):
                 q(
-                    "UPDATE change_controls SET status=%s, updated_at=NOW() WHERE id=%s",
+                    "UPDATE change_controls SET status=%s, updated_time=NOW() WHERE id=%s",
                     (new_status, row["id"]),
                     commit=True,
                 )
@@ -327,7 +322,7 @@ def page_deviation():
     # ---------- LIST ----------
     with tab_list:
         require_permission("deviations", "view")
-        rows = q("SELECT * FROM deviations ORDER BY detected_time DESC", all=True)
+        rows = q("SELECT * FROM deviations ORDER BY created_time DESC", all=True)
         if rows:
             st.markdown("<div class='card'>", unsafe_allow_html=True)
             st.dataframe(pd.DataFrame(rows), use_container_width=True)
@@ -356,10 +351,10 @@ def page_deviation():
             else:
                 sql = """
                 INSERT INTO deviations
-                (deviation_id, title, description, detected_time,
+                (deviation_id, title, description,
                  immediate_action, preventive_action, root_cause,
-                 risk_eval, status, created_by)
-                VALUES (%s,%s,%s,NOW(),%s,%s,%s,%s,'Open',%s)
+                 risk_eval, status, created_id)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,'Open',%s)
                 """
 
                 params = (
@@ -410,8 +405,8 @@ def page_deviation():
                     """
                     UPDATE deviations
                        SET status=%s,
-                           updated_by=%s,
-                           updated_at=NOW()
+                           updated_id=%s,
+                           updated_time=NOW()
                      WHERE id=%s
                     """,
                     (new_status, user["id"], row["id"]),
@@ -472,13 +467,14 @@ def page_capa():
 
         capa_title = st.text_input("CAPA 제목", placeholder="예: 공정 오염 가능성 예방 조치")
 
+        # DB에는 from_type 컬럼이 없지만, UI는 일단 유지 (저장은 안 함)
         from_type = st.selectbox("연계 타입", ["DEVIATION", "CHANGE"])
         action_plan = st.text_area("Action Plan")
         corrective_action = st.text_area("Corrective Action")
         preventive_action = st.text_area("Preventive Action")
 
         owner_id = st.number_input("담당자 User ID", min_value=1)
-        due_date = st.date_input("Due Date", date.today())
+        due_date = st.date_input("Due Date", date.today())  # DB의 date 컬럼에 매핑
         progress = st.selectbox("진행 상태", ["Not Started", "In Progress", "Completed"])
 
         if st.button("CAPA 등록"):
@@ -487,14 +483,14 @@ def page_capa():
             else:
                 sql = """
                 INSERT INTO capas
-                (capa_id, title, from_type, action_plan,
+                (capa_id, title, action_plan,
                  corrective_action, preventive_action,
-                 owner_id, progress, due_date)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                 owner_id, progress, date)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
                 """
 
                 params = (
-                    capa_id, capa_title, from_type,
+                    capa_id, capa_title,
                     action_plan, corrective_action, preventive_action,
                     owner_id, progress, due_date
                 )
@@ -541,8 +537,8 @@ def page_capa():
                     """
                     UPDATE capas
                        SET progress=%s,
-                           updated_by=%s,
-                           updated_at=NOW()
+                           updated_id=%s,
+                           updated_time=NOW()
                      WHERE id=%s
                     """,
                     (new_progress, user["id"], row["id"]),
@@ -585,7 +581,7 @@ def page_risk():
     # ---------- LIST ----------
     with tab_list:
         require_permission("risk", "view")
-        rows = q("SELECT * FROM risk_assessment ORDER BY created_at DESC", all=True)
+        rows = q("SELECT * FROM risk_assessment ORDER BY created_time DESC", all=True)
         if rows:
             st.markdown("<div class='card'>", unsafe_allow_html=True)
             st.dataframe(pd.DataFrame(rows), use_container_width=True)
@@ -604,8 +600,12 @@ def page_risk():
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.text(f"자동 생성 Risk ID: {risk_id}")
 
-        risk_title = st.text_input("Risk Assessment 제목", placeholder="예: 작업자 실수 가능성 증가에 대한 RPN 평가")
-        object_type = st.selectbox("Object Type", ["CHANGE", "DEVIATION", "CAPA"])
+        risk_title = st.text_input(
+            "Risk Assessment 제목",
+            placeholder="예: 작업자 실수 가능성 증가에 대한 RPN 평가"
+        )
+
+        # 기존 object_type / object_id 컬럼은 DB에서 제거됨 → UI도 제거
 
         sev = st.slider("Severity", 1, 10, 5)
         occ = st.slider("Occurrence", 1, 10, 5)
@@ -616,14 +616,14 @@ def page_risk():
 
             sql = """
             INSERT INTO risk_assessment
-            (risk_id, title, object_type, severity, occurrence,
-             detection, risk_score, status, created_by)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,'Draft',%s)
+            (risk_id, title, severity, occurrence,
+             detection, risk_score, status, created_id)
+            VALUES (%s,%s,%s,%s,%s,%s,'Draft',%s)
             """
 
             q(
                 sql,
-                (risk_id, risk_title, object_type, sev, occ, det, risk_score, user["id"]),
+                (risk_id, risk_title, sev, occ, det, risk_score, user["id"]),
                 commit=True,
             )
 
@@ -840,8 +840,6 @@ def main():
         """,
         unsafe_allow_html=True,
     )
-    
-    
 
     if "user" not in st.session_state:
         login_screen()
