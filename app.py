@@ -777,8 +777,6 @@ def main():
         """
         <div class="app-header">
             <img src="https://raw.githubusercontent.com/yehyun226/final/main/image.png?raw=1" width="1200">
-            
-
             <h1>GMP Quality Management System</h1>
             <p>Change · Deviation · CAPA · Risk · Audit – All in One Quality System</p>
         </div>
