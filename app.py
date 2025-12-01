@@ -121,7 +121,7 @@ def require_permission(module: str, action: str):
 
 def login_screen():
     st.markdown("<div class='card'>", unsafe_allow_html=True)
-    st.markdown("<h2>🔐 GMP QMS Login</h2>", unsafe_allow_html=True)
+    st.markdown("<h2> GMP QMS Login </h2>", unsafe_allow_html=True)
 
     username = st.text_input("Username")
     pw = st.text_input("Password", type="password")
@@ -193,8 +193,7 @@ def page_change_control():
     st.markdown(
         """
         <div class="header-box">
-            <h2>📋 Change Control</h2>
-            <p>공정·설비·시험법·원자재 등의 변경을 등록하고 상태를 추적합니다.</p>
+            <h2> Change Control </h2>
         </div>
         """,
         unsafe_allow_html=True,
@@ -310,8 +309,7 @@ def page_deviation():
     st.markdown(
         """
         <div class="header-box">
-            <h2>⚠️ Deviation</h2>
-            <p>일탈 발생 시 등록하고, 조사·조치·종결까지 이력을 관리합니다.</p>
+            <h2> Deviation </h2>
         </div>
         """,
         unsafe_allow_html=True,
@@ -437,8 +435,7 @@ def page_capa():
     st.markdown(
         """
         <div class="header-box">
-            <h2>🛠 CAPA</h2>
-            <p>일탈·변경 등의 원인을 기반으로 시정·예방조치를 계획하고 추적합니다.</p>
+            <h2> CAPA </h2>
         </div>
         """,
         unsafe_allow_html=True,
@@ -569,8 +566,7 @@ def page_risk():
     st.markdown(
         """
         <div class="header-box">
-            <h2>📊 Risk Assessment (RPN)</h2>
-            <p>변경·일탈·CAPA 건에 대한 Risk Priority Number를 산정합니다.</p>
+            <h2> Risk Assessment (RPN)</h2>
         </div>
         """,
         unsafe_allow_html=True,
@@ -697,8 +693,7 @@ def page_users():
     st.markdown(
         """
         <div class="header-box">
-            <h2>👤 사용자 관리 (Admin)</h2>
-            <p>계정 생성, 권한(Role) 부여 등을 관리합니다.</p>
+            <h2>사용자 관리 (Admin)</h2>
         </div>
         """,
         unsafe_allow_html=True,
@@ -757,8 +752,7 @@ def page_audit():
     st.markdown(
         """
         <div class="header-box">
-            <h2>🧾 Audit Trail</h2>
-            <p>모든 주요 변경 및 상태 변경 이력을 감사 용도로 조회합니다.</p>
+            <h2>Audit Trail</h2>
         </div>
         """,
         unsafe_allow_html=True,
@@ -783,8 +777,7 @@ def page_dashboard():
     st.markdown(
         """
         <div class="header-box">
-            <h2>📊 Dashboard Summary</h2>
-            <p>Change / Deviation / CAPA 현황을 한 눈에 확인하는 요약 화면입니다.</p>
+            <h2> Dashboard </h2>
         </div>
         """,
         unsafe_allow_html=True,
