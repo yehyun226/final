@@ -782,7 +782,7 @@ def page_dashboard():
         st.markdown()
 
     with col3:
-        st.markdown("<div class='card'>")
+        st.markdown()
         st.subheader("CAPA Progress")
         if cp:
             st.dataframe(pd.DataFrame(cp))
