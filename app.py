@@ -760,27 +760,27 @@ def page_dashboard():
     dv = q("SELECT status, COUNT(*) AS cnt FROM deviations GROUP BY status", all=True)
     cp = q("SELECT progress, COUNT(*) AS cnt FROM capas GROUP BY progress", all=True)
 
-# unsafe_allow_html=True HTML 렌더링을 허용할 때 쓰는 정식 파라미터
+
 # use_container_width=True 표를 가로로 꽉 채워 보여줌
     col1, col2, col3 = st.columns(3)
     with col1:
         st.subheader("Change Status")
         if cc:
-            st.dataframe(pd.DataFrame(cc), use_container_width=True)
+            st.dataframe(pd.DataFrame(cc))
         else:
             st.write("데이터 없음")
 
     with col2:
         st.subheader("Deviation Status")
         if dv:
-            st.dataframe(pd.DataFrame(dv), use_container_width=True)
+            st.dataframe(pd.DataFrame(dv))
         else:
             st.write("데이터 없음")
 
     with col3:
         st.subheader("CAPA Progress")
         if cp:
-            st.dataframe(pd.DataFrame(cp), use_container_width=True)
+            st.dataframe(pd.DataFrame(cp))
         else:
             st.write("데이터 없음")
 
