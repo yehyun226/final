@@ -81,12 +81,15 @@ ROLE_PERMISSIONS = {
 
 # 로그인
 # 해시 암호
-def hash_pw(pw: str) -> str:
-    return bcrypt.hashpw(pw.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
+# 바이트 형태로 바꾼 뒤 무작위 암호가 나오게 한다.
+def hash_pw(pw):
+    return bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
 
-def verify_pw(pw: str, hashed: str) -> bool:
-    return bcrypt.checkpw(pw.encode("utf-8"), hashed.encode("utf-8"))
+# 로그인 시 비밀번호와 일치하는지 확인한다.
+def verify_pw(pw, hashed):
+    return bcrypt.checkpw(pw.encode(), hashed.encode())
+
 
 # 로그인
 def login_required():
@@ -154,6 +157,7 @@ def log_action(user_id, action_type, obj_type, obj_id,
 
 
 # 문자 번호 생성기
+
 def generate_change_id():
     return "CHG-" + datetime.now().strftime("%Y%m%d-%H%M%S")
 
@@ -189,7 +193,7 @@ def page_change_control():
     # list
     with tab_list: 
         require_permission("change_control", "view") # 권한 확인
-        rows = q("SELECT * FROM change_controls ORDER BY created_time DESC", all=True)
+        rows = q("SELECT * FROM change_controls ", all=True) # 모든 데이터베이스 가져온다
         if rows:
             st.markdown("<div class='card'>", unsafe_allow_html=True)
             df = pd.DataFrame(rows)
@@ -424,8 +428,8 @@ def page_capa():
 
     # LIST 
     with tab_list:
-        require_permission("capa", "view")
-        rows = q("SELECT * FROM capas ORDER BY id DESC", all=True)
+        require_permission("capa", "view") # 권한 확인
+        rows = q("SELECT * FROM capas ", all=True) # 데이터베이스에서 불러온다.
         if rows:
             st.markdown("<div class='card'>", unsafe_allow_html=True)
             st.dataframe(pd.DataFrame(rows), use_container_width=True)
@@ -756,34 +760,35 @@ def page_dashboard():
     dv = q("SELECT status, COUNT(*) AS cnt FROM deviations GROUP BY status", all=True)
     cp = q("SELECT progress, COUNT(*) AS cnt FROM capas GROUP BY progress", all=True)
 
+# unsafe_allow_html=True HTML 렌더링을 허용할 때 쓰는 정식 파라미터
+# use_container_width=True 표를 가로로 꽉 채워 보여줌
     col1, col2, col3 = st.columns(3)
-
     with col1:
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
+        st.markdown()
         st.subheader("Change Status")
         if cc:
-            st.dataframe(pd.DataFrame(cc), use_container_width=True)
+            st.dataframe(pd.DataFrame(cc))
         else:
             st.write("데이터 없음")
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown()
 
     with col2:
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
+        st.markdown()
         st.subheader("Deviation Status")
         if dv:
-            st.dataframe(pd.DataFrame(dv), use_container_width=True)
+            st.dataframe(pd.DataFrame(dv))
         else:
             st.write("데이터 없음")
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown()
 
     with col3:
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
+        st.markdown("<div class='card'>")
         st.subheader("CAPA Progress")
         if cp:
-            st.dataframe(pd.DataFrame(cp), use_container_width=True)
+            st.dataframe(pd.DataFrame(cp))
         else:
             st.write("데이터 없음")
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown()
 
 
 # MAIN
