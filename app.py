@@ -764,31 +764,25 @@ def page_dashboard():
 # use_container_width=True 표를 가로로 꽉 채워 보여줌
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.markdown()
         st.subheader("Change Status")
         if cc:
-            st.dataframe(pd.DataFrame(cc))
+            st.dataframe(pd.DataFrame(cc), use_container_width=True)
         else:
             st.write("데이터 없음")
-        st.markdown()
 
     with col2:
-        st.markdown()
         st.subheader("Deviation Status")
         if dv:
-            st.dataframe(pd.DataFrame(dv))
+            st.dataframe(pd.DataFrame(dv), use_container_width=True)
         else:
             st.write("데이터 없음")
-        st.markdown()
 
     with col3:
-        st.markdown()
         st.subheader("CAPA Progress")
         if cp:
-            st.dataframe(pd.DataFrame(cp))
+            st.dataframe(pd.DataFrame(cp), use_container_width=True)
         else:
             st.write("데이터 없음")
-        st.markdown()
 
 
 # MAIN
