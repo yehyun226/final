@@ -6,11 +6,8 @@ import streamlit as st
 import pymysql
 import pandas as pd
 import bcrypt
-from st_aggrid import AgGrid, GridOptionsBuilder  # 안 써도 일단 그대로 둠
 
-# ====================================================
-# 0. DB CONNECTION
-# ====================================================
+# 데이터베이스 연결
 def db_conn():
     return pymysql.connect(
         host=os.environ["MYSQL_HOST"],
@@ -41,10 +38,7 @@ def q(sql, params=None, one=False, all=False, commit=False):
     conn.close()
     return result
 
-
-# ====================================================
-# 1. ROLE PERMISSIONS
-# ====================================================
+# 권한
 ROLE_PERMISSIONS = {
     "OPERATOR": {
         "change_control": ["create", "view"],
@@ -85,9 +79,8 @@ ROLE_PERMISSIONS = {
 }
 
 
-# ====================================================
-# 2. AUTH / LOGIN
-# ====================================================
+# 로그인
+# 해시 암호
 def hash_pw(pw: str) -> str:
     return bcrypt.hashpw(pw.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
@@ -95,12 +88,11 @@ def hash_pw(pw: str) -> str:
 def verify_pw(pw: str, hashed: str) -> bool:
     return bcrypt.checkpw(pw.encode("utf-8"), hashed.encode("utf-8"))
 
-
+# 로그인
 def login_required():
     if "user" not in st.session_state:
         st.warning("로그인이 필요합니다.")
         st.stop()
-
 
 def require_permission(module: str, action: str):
     user = st.session_state.get("user")
@@ -108,7 +100,7 @@ def require_permission(module: str, action: str):
         st.error("로그인이 필요합니다.")
         st.stop()
 
-    role = user["role"]
+    role = user["role"] # 권한 가져옴
     allowed = ROLE_PERMISSIONS.get(role, {}).get(module, [])
 
     if action == "view" and "view_all" in allowed:
@@ -119,7 +111,7 @@ def require_permission(module: str, action: str):
         st.stop()
 
 
-def login_screen():
+def login_screen(): # 로그인 받는 중
     st.markdown("<div class='card'>", unsafe_allow_html=True)
     st.markdown("<h2> GMP QMS Login </h2>", unsafe_allow_html=True)
 
@@ -149,10 +141,7 @@ def login_screen():
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-
-# ====================================================
-# 3. AUDIT LOG
-# ====================================================
+# audit log 기록
 def log_action(user_id, action_type, obj_type, obj_id,
                field_name=None, old_value=None, new_value=None):
     sql = """
@@ -164,9 +153,7 @@ def log_action(user_id, action_type, obj_type, obj_id,
             field_name, old_value, new_value), commit=True)
 
 
-# ====================================================
-# 4. ID GENERATORS
-# ====================================================
+# 문자 번호 생성기
 def generate_change_id():
     return "CHG-" + datetime.now().strftime("%Y%m%d-%H%M%S")
 
@@ -183,9 +170,7 @@ def generate_risk_id():
     return "RISK-" + datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
-# ====================================================
-# 5. CHANGE CONTROL
-# ====================================================
+# change control
 def page_change_control():
     login_required()
     user = st.session_state["user"]
@@ -201,9 +186,9 @@ def page_change_control():
 
     tab_list, tab_new, tab_status = st.tabs(["목록", "새 변경 생성", "상태 변경"])
 
-    # ---------- LIST ----------
-    with tab_list:
-        require_permission("change_control", "view")
+    # list
+    with tab_list: 
+        require_permission("change_control", "view") # 권한 확인
         rows = q("SELECT * FROM change_controls ORDER BY created_time DESC", all=True)
         if rows:
             st.markdown("<div class='card'>", unsafe_allow_html=True)
@@ -213,7 +198,7 @@ def page_change_control():
         else:
             st.info("등록된 Change Control이 없습니다.")
 
-    # ---------- NEW ----------
+    # new
     with tab_new:
         require_permission("change_control", "create")
 
@@ -256,7 +241,7 @@ def page_change_control():
 
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # ---------- STATUS CHANGE ----------
+    # change
     with tab_status:
         require_permission("change_control", "edit")
 
@@ -298,10 +283,7 @@ def page_change_control():
 
         st.markdown("</div>", unsafe_allow_html=True)
 
-
-# ====================================================
-# 6. DEVIATION (Batch ID 삭제 + Title 추가)
-# ====================================================
+# DEVIATION 
 def page_deviation():
     login_required()
     user = st.session_state["user"]
@@ -317,7 +299,7 @@ def page_deviation():
 
     tab_list, tab_new, tab_status = st.tabs(["목록", "새 일탈 등록", "상태 변경"])
 
-    # ---------- LIST ----------
+    # list
     with tab_list:
         require_permission("deviations", "view")
         rows = q("SELECT * FROM deviations ORDER BY created_time DESC", all=True)
@@ -328,7 +310,7 @@ def page_deviation():
         else:
             st.info("등록된 Deviation이 없습니다.")
 
-    # ---------- NEW ----------
+    # NEW 
     with tab_new:
         require_permission("deviations", "create")
 
@@ -373,7 +355,7 @@ def page_deviation():
 
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # ---------- STATUS CHANGE ----------
+    # STATUS CHANGE 
     with tab_status:
         require_permission("deviations", "edit")
 
@@ -424,10 +406,7 @@ def page_deviation():
 
         st.markdown("</div>", unsafe_allow_html=True)
 
-
-# ====================================================
-# 7. CAPA (연계 ID 삭제 + Title 추가)
-# ====================================================
+# 7. CAPA 
 def page_capa():
     login_required()
     user = st.session_state["user"]
@@ -441,9 +420,9 @@ def page_capa():
         unsafe_allow_html=True,
     )
 
-    tab_list, tab_new, tab_status = st.tabs(["목록", "CAPA 생성", "상태 변경"])
+    tab_list, tab_new, tab_status = st.tabs(["목록", "새 CAPA 생성", "상태 변경"])
 
-    # ---------- LIST ----------
+    # LIST 
     with tab_list:
         require_permission("capa", "view")
         rows = q("SELECT * FROM capas ORDER BY id DESC", all=True)
@@ -454,7 +433,7 @@ def page_capa():
         else:
             st.info("등록된 CAPA가 없습니다.")
 
-    # ---------- NEW ----------
+    # NEW 
     with tab_new:
         require_permission("capa", "create")
 
@@ -504,7 +483,7 @@ def page_capa():
 
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # ---------- STATUS CHANGE ----------
+    # STATUS CHANGE 
     with tab_status:
         require_permission("capa", "edit")
 
@@ -555,10 +534,7 @@ def page_capa():
 
         st.markdown("</div>", unsafe_allow_html=True)
 
-
-# ====================================================
-# 8. RISK ASSESSMENT (Object ID 삭제 + Title 추가)
-# ====================================================
+# 8. RISK ASSESSMENT
 def page_risk():
     login_required()
     user = st.session_state["user"]
@@ -574,7 +550,7 @@ def page_risk():
 
     tab_list, tab_new, tab_status = st.tabs(["목록", "Risk 평가 생성", "상태 변경"])
 
-    # ---------- LIST ----------
+    # LIST 
     with tab_list:
         require_permission("risk", "view")
         rows = q("SELECT * FROM risk_assessment ORDER BY created_time DESC", all=True)
@@ -585,7 +561,7 @@ def page_risk():
         else:
             st.info("등록된 Risk 평가가 없습니다.")
 
-    # ---------- NEW ----------
+    # NEW 
     with tab_new:
         require_permission("risk", "create")
 
@@ -635,7 +611,7 @@ def page_risk():
 
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # ---------- STATUS CHANGE ----------
+    # STATUS CHANGE 
     with tab_status:
         require_permission("risk", "edit")
 
@@ -681,9 +657,7 @@ def page_risk():
         st.markdown("</div>", unsafe_allow_html=True)
 
 
-# ====================================================
-# 9. USER MANAGEMENT (Admin)
-# ====================================================
+# USER MANAGEMENT 
 def page_users():
     login_required()
     require_permission("user_management", "create")
@@ -741,10 +715,7 @@ def page_users():
 
         st.markdown("</div>", unsafe_allow_html=True)
 
-
-# ====================================================
-# 10. AUDIT TRAIL
-# ====================================================
+# AUDIT TRAIL
 def page_audit():
     login_required()
     require_permission("audit_logs", "view")
@@ -768,9 +739,7 @@ def page_audit():
         st.info("표시할 Audit 로그가 없습니다.")
 
 
-# ====================================================
-# 11. DASHBOARD (그대로 유지)
-# ====================================================
+# DASHBOARD
 def page_dashboard():
     login_required()
 
@@ -817,9 +786,7 @@ def page_dashboard():
         st.markdown("</div>", unsafe_allow_html=True)
 
 
-# ====================================================
-# 12. MAIN
-# ====================================================
+# MAIN
 def main():
     st.set_page_config(page_title="GMP QMS", layout="wide")
 
