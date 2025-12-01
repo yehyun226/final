@@ -110,12 +110,12 @@ def require_permission(module: str, action: str):
         return
 
     if action not in allowed:
-        st.error("⚠️ 접근 권한이 없습니다.")
+        st.error("접근 권한이 없습니다.")
         st.stop()
 
 
 def login_screen(): # 로그인 받는 중
-    st.markdown("<div class='card'>", unsafe_allow_html=True)
+
     st.markdown("<h2> GMP QMS Login </h2>", unsafe_allow_html=True)
 
     username = st.text_input("Username")
@@ -142,7 +142,6 @@ def login_screen(): # 로그인 받는 중
         else:
             st.error("비밀번호가 올바르지 않습니다.")
 
-    st.markdown("</div>", unsafe_allow_html=True)
 
 # audit log 기록
 def log_action(user_id, action_type, obj_type, obj_id,
@@ -195,10 +194,8 @@ def page_change_control():
         require_permission("change_control", "view") # 권한 확인
         rows = q("SELECT * FROM change_controls ", all=True) # 모든 데이터베이스 가져온다
         if rows:
-            st.markdown("<div class='card'>", unsafe_allow_html=True)
             df = pd.DataFrame(rows)
-            st.dataframe(df, use_container_width=True)
-            st.markdown("</div>", unsafe_allow_html=True)
+            st.dataframe(df)
         else:
             st.info("등록된 Change Control이 없습니다.")
 
@@ -210,7 +207,6 @@ def page_change_control():
             st.session_state["new_change_id"] = generate_change_id()
         change_id = st.session_state["new_change_id"]
 
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.text(f"자동 생성 Change ID: {change_id}")
 
         title = st.text_input("변경 제목")
@@ -221,7 +217,7 @@ def page_change_control():
 
         if st.button("생성"):
             if not title or not description:
-                st.warning("제목과 설명은 필수입니다.")
+                st.warning("제목과 설명을 적어주십시오.")
             else:
                 sql = """
                 INSERT INTO change_controls
@@ -234,22 +230,21 @@ def page_change_control():
                     impact, risk_level, user["id"], "Draft"
                 )
 
-                q(sql, params, commit=True)
-
+                q(sql, params, commit=True) # DB에 저장
+                
+                # log 기록 DB에 저장
                 log_action(user["id"], "CREATE", "CHANGE", change_id, new_value=title)
 
-                st.session_state.pop("new_change_id", None)
+                st.session_state.pop("new_change_id", None) # 초기화
 
                 st.success(f"등록 완료! (ID = {change_id})")
                 st.rerun()
 
-        st.markdown("</div>", unsafe_allow_html=True)
 
     # change
     with tab_status:
         require_permission("change_control", "edit")
 
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
         cid = st.text_input("Change ID 입력")
 
         if st.button("불러오기"):
@@ -259,10 +254,10 @@ def page_change_control():
             else:
                 st.session_state["selected_change"] = row
 
-        row = st.session_state.get("selected_change")
+        row = st.session_state.get("selected_change") # 디렉토리 보여준다.
         if row:
             st.write("선택된 Change:", row)
-
+            # 상태 설정
             status_options = ["Draft", "Review", "QA Review", "Approved", "Implemented", "Closed"]
             cur = row.get("status") or "Draft"
             idx = status_options.index(cur) if cur in status_options else 0
@@ -275,7 +270,7 @@ def page_change_control():
                     (new_status, row["id"]),
                     commit=True,
                 )
-
+                # log 기록
                 log_action(
                     user["id"], "STATUS_CHANGE", "CHANGE",
                     row["change_id"],
@@ -285,7 +280,6 @@ def page_change_control():
                 st.success("상태 변경 완료")
                 st.rerun()
 
-        st.markdown("</div>", unsafe_allow_html=True)
 
 # DEVIATION 
 def page_deviation():
@@ -682,14 +676,11 @@ def page_users():
     with tab_list:
         rows = q("SELECT id, username, role, email, created_at FROM users ORDER BY id", all=True)
         if rows:
-            st.markdown("<div class='card'>", unsafe_allow_html=True)
-            st.dataframe(pd.DataFrame(rows), use_container_width=True)
-            st.markdown("</div>", unsafe_allow_html=True)
+            st.dataframe(pd.DataFrame(rows))
         else:
             st.info("등록된 사용자가 없습니다.")
 
     with tab_new:
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
         username = st.text_input("Username")
         email = st.text_input("Email")
         pw = st.text_input("초기 Password", type="password")
@@ -697,7 +688,7 @@ def page_users():
 
         if st.button("사용자 생성"):
             if not username or not pw:
-                st.warning("Username / Password는 필수입니다.")
+                st.warning("Username / Password를 적으십시오.")
             else:
                 hashed = hash_pw(pw)
                 q(
@@ -707,17 +698,12 @@ def page_users():
                 )
 
                 log_action(
-                    admin["id"],
-                    "CREATE_USER",
-                    "USER",
-                    username,
-                    new_value=f"role={role}, email={email}",
+                    admin["id"], "CREATE_USER", "USER", username, new_value=f"role={role}, email={email}",
                 )
 
                 st.success("사용자 생성 완료!")
                 st.rerun()
 
-        st.markdown("</div>", unsafe_allow_html=True)
 
 # AUDIT TRAIL
 def page_audit():
@@ -736,9 +722,7 @@ def page_audit():
     rows = q("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 300", all=True)
 
     if rows:
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.dataframe(pd.DataFrame(rows), use_container_width=True)
-        st.markdown("</div>", unsafe_allow_html=True)
     else:
         st.info("표시할 Audit 로그가 없습니다.")
 
@@ -756,12 +740,12 @@ def page_dashboard():
         unsafe_allow_html=True,
     )
 
+# 데이터 베이스에서 상태 별로 몇개가 있는지 확인해서 숫자를 센다.
     cc = q("SELECT status, COUNT(*) AS cnt FROM change_controls GROUP BY status", all=True)
     dv = q("SELECT status, COUNT(*) AS cnt FROM deviations GROUP BY status", all=True)
     cp = q("SELECT progress, COUNT(*) AS cnt FROM capas GROUP BY progress", all=True)
 
 
-# use_container_width=True 표를 가로로 꽉 채워 보여줌
     col1, col2, col3 = st.columns(3)
     with col1:
         st.subheader("Change Status")
